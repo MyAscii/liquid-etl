@@ -5,6 +5,7 @@ import time
 from typing import Any, Dict, Optional
 
 from ..service import LiquidService
+from ..utils.sqlite_writer import SQLiteWriter
 
 
 class LiquidStreamerAdapter:
@@ -15,28 +16,36 @@ class LiquidStreamerAdapter:
         self.enrich = enrich
         self._pubsub = None
         self._topics = None
+        self._sqlite: Optional[SQLiteWriter] = None
 
         if output and output.startswith("projects/"):
             try:
                 from google.cloud import pubsub_v1
                 self._pubsub = pubsub_v1.PublisherClient()
-                # Subtopics
                 self._topics = {
                     "blocks": f"{output}.blocks",
                     "transactions": f"{output}.transactions",
                 }
             except Exception:
                 raise RuntimeError("google-cloud-pubsub not installed; install with pip install -e .[streaming]")
+        elif output and output.startswith("sqlite://"):
+            path = output[len("sqlite://"):]
+            self._sqlite = SQLiteWriter(path)
 
     def _emit(self, topic: str, item: Dict[str, Any]):
         line = json.dumps(item)
+        if self._sqlite:
+            if topic == "blocks":
+                self._sqlite.write_block(item)
+            else:
+                self._sqlite.write_transaction(item)
+            return
         if self._pubsub:
             self._pubsub.publish(self._topics[topic], line.encode("utf-8"))
         else:
             print(line)
 
     def _inline_enrich(self, tx: Dict[str, Any]) -> None:
-        # Best-effort inline enrichment
         if not self.enrich:
             return
         for vin in tx.get("inputs", []):
@@ -68,7 +77,6 @@ class LiquidStreamerAdapter:
                 if current > head:
                     time.sleep(poll_interval)
                     continue
-                # Emit up to batch_size
                 emitted = 0
                 while emitted < self.batch_size and current <= head:
                     bundle = self.service.get_block_by_number(current)

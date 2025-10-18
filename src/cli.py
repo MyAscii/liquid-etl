@@ -101,11 +101,33 @@ def _cmd_stream(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_load_ndjson_to_sqlite(args: argparse.Namespace) -> int:
+    from .utils.sqlite_writer import SQLiteWriter
+    import json
+
+    writer = SQLiteWriter(args.db)
+    if args.blocks_input:
+        with open(args.blocks_input, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                writer.write_block(item)
+    if args.transactions_input:
+        with open(args.transactions_input, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                writer.write_transaction(item)
+    writer.close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="liquidetl", description="Liquid Network ETL and streaming toolkit")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    # export_blocks_and_transactions
     p_export = sub.add_parser("export_blocks_and_transactions", help="Export blocks and transactions for a range")
     _add_common_provider(p_export)
     p_export.add_argument("-s", "-start", "--start-block", type=int, required=True)
@@ -114,14 +136,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_export.add_argument("--transactions-output", required=True)
     p_export.set_defaults(func=_cmd_export_blocks_and_transactions)
 
-    # enrich_transactions
     p_enrich = sub.add_parser("enrich_transactions", help="Enrich transactions with input details (requires txindex=1)")
     _add_common_provider(p_enrich)
     p_enrich.add_argument("--transactions-input", required=True)
     p_enrich.add_argument("--transactions-output", required=True)
     p_enrich.set_defaults(func=_cmd_enrich_transactions)
 
-    # get_block_range_for_date
     p_range = sub.add_parser("get_block_range_for_date", help="Return start and end block for a UTC date")
     _add_common_provider(p_range)
     p_range.add_argument("--date", required=True, help="YYYY-MM-DD")
@@ -129,7 +149,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_range.add_argument("--end-hour", type=int, default=24)
     p_range.set_defaults(func=_cmd_get_block_range_for_date)
 
-    # export_all
     p_all = sub.add_parser("export_all", help="Partition date or block ranges into batches and export")
     _add_common_provider(p_all)
     group = p_all.add_mutually_exclusive_group(required=True)
@@ -141,7 +160,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.add_argument("--enrich", action="store_true")
     p_all.set_defaults(func=_cmd_export_all)
 
-    # filter_items
     p_filter = sub.add_parser("filter_items", help="Filter NDJSON or CSV outputs using a Python predicate")
     p_filter.add_argument("--input", required=True)
     p_filter.add_argument("--output", required=True)
@@ -149,16 +167,21 @@ def build_parser() -> argparse.ArgumentParser:
     p_filter.add_argument("--format", choices=("ndjson", "csv"), default="ndjson")
     p_filter.set_defaults(func=_cmd_filter_items)
 
-    # stream
     p_stream = sub.add_parser("stream", help="Continuously stream blocks and transactions")
     _add_common_provider(p_stream)
     p_stream.add_argument("--start-block", type=int, required=True)
     p_stream.add_argument("--lag", type=int, default=0)
-    p_stream.add_argument("--output", default="console", help="'console' or projects/.../topics/crypto_liquid")
+    p_stream.add_argument("--output", default="console", help="'console', 'sqlite:///path/to.db' or projects/.../topics/crypto_liquid")
     p_stream.add_argument("--batch-size", type=int, default=100)
     p_stream.add_argument("--poll-interval", type=float, default=2.0)
     p_stream.add_argument("--enrich", action="store_true")
     p_stream.set_defaults(func=_cmd_stream)
+
+    p_load = sub.add_parser("load_ndjson_to_sqlite", help="Load NDJSON exports into a local SQLite DB")
+    p_load.add_argument("--db", required=True, help="Path to .db file")
+    p_load.add_argument("--blocks-input", help="Path to blocks NDJSON")
+    p_load.add_argument("--transactions-input", help="Path to transactions NDJSON")
+    p_load.set_defaults(func=_cmd_load_ndjson_to_sqlite)
 
     return parser
 
