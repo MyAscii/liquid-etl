@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "liquid-etl"
+version = "0.1.0"
+description = "ETL and streaming for the Liquid Network (Elements), inspired by bitcoin-etl."
+readme = "README.md"
+requires-python = ">=3.9"
+authors = [{ name = "Liquid ETL" }]
+keywords = ["liquid", "elements", "bitcoin", "etl", "blockchain", "streaming"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+dependencies = [
+  "requests>=2.31.0",
+  "python-dateutil>=2.8.2",
+]
+
+[project.optional-dependencies]
+streaming = [
+  "google-cloud-pubsub>=2.18.0",
+]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+]
+
+[project.scripts]
+liquidetl = "liquidetl.cli:main"
+
+[tool.setuptools]
+packages = [
+  "liquidetl",
+  "liquidetl.jobs",
+  "liquidetl.streaming",
+  "liquidetl.utils",
+]
+package-dir = { "liquidetl" = "src" }

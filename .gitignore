@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Build/packaging
+build/
+dist/
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project-specific
+src/liquid_etl.egg-info/
+
+#data
+sample_data/

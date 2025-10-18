@@ -1,0 +1,136 @@
+# Liquid ETL
+
+Liquid ETL is an Extract-Transform-Load and streaming toolkit for the Liquid Network (Elements), modeled after bitcoin-etl. It exports blocks and transactions, enriches transactions by resolving inputs, partitions outputs for analytics, and optionally streams data to console or Google Pub/Sub.
+
+## Installation
+
+- Stable: `pip install -e .`
+- Latest dev with streaming extras: `pip install -e .[streaming]`
+
+Requires a full Liquid/Elements node JSON-RPC endpoint (often `elementsd`), with `txindex=1` for input enrichment.
+
+## Key Commands
+
+- `liquidetl export_blocks_and_transactions` — exports blocks and transactions for a block range to `blocks.json` and `transactions.json`.
+- `liquidetl enrich_transactions` — fills transaction input details by looking up spent outputs; requires `txindex=1`.
+- `liquidetl get_block_range_for_date` — returns the start and end block covering a specific UTC date.
+- `liquidetl export_all` — partitions a date or block range into batches and writes Hive-style directories under `output/`, optionally enriching transactions.
+- `liquidetl filter_items` — filters NDJSON or CSV outputs using a Python predicate (e.g., by date or other fields).
+- `liquidetl stream` — continuously streams blocks and transactions to console or Pub/Sub.
+
+## Streaming
+
+- Streams blocks and transactions:
+  - To console by default.
+  - To Google Pub/Sub when `--output projects/your-project/topics/crypto_liquid` is provided (publishes to `.blocks` and `.transactions` subtopics).
+- Supports lagging behind head (`--lag`), batch sizing, worker tuning, and optional enrichment.
+
+## Outputs and Schema
+
+The ETL writes newline-delimited JSON (NDJSON). Below is the schema produced by the normalization layer.
+
+### blocks.json
+
+Field | Type
+----- | ----
+`hash` | hex_string
+`size` | bigint
+`stripped_size` | bigint
+`weight` | bigint
+`number` | bigint
+`version` | bigint
+`merkle_root` | hex_string
+`timestamp` | bigint
+`nonce` | bigint|null
+`bits` | hex_string|null
+`transaction_count` | bigint
+
+### transactions.json
+
+Field | Type
+----- | ----
+`hash` | hex_string
+`size` | bigint
+`virtual_size` | bigint
+`version` | bigint
+`lock_time` | bigint
+`block_number` | bigint
+`block_hash` | hex_string
+`block_timestamp` | bigint
+`is_coinbase` | boolean
+`index` | bigint
+`inputs` | []`transaction_input`
+`outputs` | []`transaction_output`
+`input_count` | bigint
+`output_count` | bigint
+`input_value` | decimal_string|null
+`output_value` | decimal_string|null
+`fee` | decimal_string|null
+
+### transaction_input
+
+Field | Type
+----- | ----
+`txid` | hex_string|null
+`vout` | bigint|null
+`sequence` | bigint
+`type` | string|null  ("pegin", "issuance", or null)
+
+### transaction_output
+
+Field | Type
+----- | ----
+`n` | bigint  (output index)
+`value` | decimal|null
+`confidential_value` | string|null
+`asset` | hex_string|null
+`type` | string|null  ("confidential", "pegout", or null)
+`addresses` | []string|null
+`required_signatures` | bigint|null
+
+Notes:
+- Confidential outputs include `valuecommitment`/`assetcommitment` on-chain; when present, `value` is hidden and we mark `type="confidential"` and surface `confidential_value`.
+- Peg-in and peg-out flags are normalized: inputs may have `type="pegin"` or `type="issuance"`; outputs may have `type="pegout"`.
+- Fees and totals are only computed when all outputs are non-confidential.
+
+## How It Works
+
+- RPC client (`LiquidRpc`) batches JSON-RPC requests to the node and decodes with `parse_float=decimal.Decimal` to avoid precision loss.
+- Core service (`LiquidService`) fetches block hashes and blocks, normalizes transactions (including confidential fields and asset IDs), and enriches inputs by resolving spent outputs.
+- Jobs:
+  - `ExportBlocksJob` iterates over block ranges and exports block and transaction items.
+  - `EnrichTransactionsJob` resolves input details from previous outputs.
+  - `export_all` orchestrates partitioning by date or block ranges, runs export jobs, and optional post-filtering by date.
+- Streaming adapter (`LiquidStreamerAdapter`) collects blocks and transactions in batches, optionally enriches transactions, calculates `item_id`s, and exports to console or Pub/Sub.
+- Utilities for filtering, iterating, batching, logging, and thread-local RPC proxies.
+
+## Typical Examples
+
+- Export a block range:
+  ```sh
+  liquidetl export_blocks_and_transactions -s 0 -e 500000 -p http://user:pass@localhost:7041 --blocks-output blocks.json --transactions-output transactions.json
+  ```
+- Enrich transactions:
+  ```sh
+  liquidetl enrich_transactions -p http://user:pass@localhost:7041 --transactions-input transactions.json --transactions-output enriched_transactions.json
+  ```
+- Get range for date:
+  ```sh
+  liquidetl get_block_range_for_date -p http://user:pass@localhost:7041 --date 2019-03-01
+  ```
+- Stream with lag and Pub/Sub:
+  ```sh
+  liquidetl stream -p http://user:pass@localhost:7041 --start-block 500000 --lag 6 --output projects/your-project/topics/crypto_liquid
+  ```
+
+## Notes and Caveats
+
+- Block times are not strictly monotonic; date-based ranges can include blocks slightly outside the date window; use `filter_items` to post-filter.
+- Confidential amounts may hide values; the ETL records commitments and may not compute fees or totals for such transactions.
+- For older RPCs or different Elements forks, some fields may be missing; the ETL attempts best-effort normalization.
+
+## Testing
+
+- Dev/test extras: `pip install -e .[dev]` then `pytest -vv`.
+- Optional env vars to point tests at nodes:
+  - `LIQUIDETL_PROVIDER_URI`
