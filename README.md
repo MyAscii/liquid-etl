@@ -6,6 +6,7 @@ Liquid ETL is an Extract-Transform-Load and streaming toolkit for the Liquid Net
 
 - Stable: `pip install -e .`
 - Latest dev with streaming extras: `pip install -e .[streaming]`
+- Postgres ingestion extras: `pip install -e .[postgres]`
 
 Requires a full Liquid/Elements node JSON-RPC endpoint (often `elementsd`), with `txindex=1` for input enrichment.
 
@@ -23,7 +24,23 @@ Requires a full Liquid/Elements node JSON-RPC endpoint (often `elementsd`), with
 - Streams blocks and transactions:
   - To console by default.
   - To Google Pub/Sub when `--output projects/your-project/topics/crypto_liquid` is provided (publishes to `.blocks` and `.transactions` subtopics).
+  - To Postgres when `--output postgresql://user:pass@host:5432/dbname` is provided.
 - Supports lagging behind head (`--lag`), batch sizing, worker tuning, and optional enrichment.
+
+## Local Postgres Ingestion
+
+- Start a local Postgres (optional helper):
+  ```sh
+  docker compose up -d postgres
+  ```
+- Directly ingest a block range from RPC into Postgres:
+  ```sh
+  liquidetl ingest_range_to_postgres -p http://127.0.0.1:7041 --datadir E:/Elements -s 0 -e 1000 --dsn postgresql://liquidetl:liquidetl@localhost:5433/liquidetl
+  ```
+- Load previously exported NDJSON into Postgres:
+  ```sh
+  liquidetl load_ndjson_to_postgres --dsn postgresql://liquidetl:liquidetl@localhost:5433/liquidetl --blocks-input blocks.json --transactions-input transactions.json
+  ```
 
 ## Outputs and Schema
 

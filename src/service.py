@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from .rpc import LiquidRpc
+from .utils.script_parsing import disassemble_script, extract_op_return_data_hex
 
 
 @dataclass
@@ -23,10 +24,22 @@ class LiquidService:
     # ---- Public API ----
     def get_block_by_number(self, height: int) -> BlockWithTxs:
         h = self.rpc.getblockhash(height)
-        b = self.rpc.getblock(h, verbosity=2)
+        b = self.rpc.getblock(h, verbosity=3)
         block_item = self._normalize_block(b)
         tx_items = [self._normalize_tx(t, block_item, tx_index=i) for i, t in enumerate(b.get("tx", []))]
         return BlockWithTxs(block=block_item, transactions=tx_items)
+
+    def get_blocks_by_numbers(self, heights: List[int]) -> List[BlockWithTxs]:
+        if not heights:
+            return []
+        hashes = self.rpc.batch_call([("getblockhash", [h]) for h in heights])
+        blocks = self.rpc.batch_call([("getblock", [block_hash, 3]) for block_hash in hashes])
+        bundles: List[BlockWithTxs] = []
+        for b in blocks:
+            block_item = self._normalize_block(b)
+            tx_items = [self._normalize_tx(t, block_item, tx_index=i) for i, t in enumerate(b.get("tx", []))]
+            bundles.append(BlockWithTxs(block=block_item, transactions=tx_items))
+        return bundles
 
     def get_head_height(self) -> int:
         return self.rpc.getblockcount()
@@ -75,16 +88,25 @@ class LiquidService:
         # Elements block fields closely mirror Bitcoin
         return {
             "hash": b.get("hash"),
+            "confirmations": b.get("confirmations"),
             "size": b.get("size"),
             "stripped_size": b.get("strippedsize"),
             "weight": b.get("weight"),
             "number": b.get("height"),
             "version": b.get("version"),
+            "version_hex": b.get("versionHex"),
             "merkle_root": b.get("merkleroot"),
             "timestamp": b.get("time"),
+            "median_time": b.get("mediantime"),
             "nonce": b.get("nonce"),
             "bits": b.get("bits"),
-            "transaction_count": len(b.get("tx", [])),
+            "previous_block_hash": b.get("previousblockhash"),
+            "next_block_hash": b.get("nextblockhash"),
+            "transaction_count": b.get("nTx") if b.get("nTx") is not None else len(b.get("tx", [])),
+            "signblock_challenge": b.get("signblock_challenge"),
+            "signblock_witness_asm": b.get("signblock_witness_asm"),
+            "signblock_witness_hex": b.get("signblock_witness_hex"),
+            "raw_block": b,
         }
 
     def _normalize_address_info(self, spk: Dict[str, Any]) -> Tuple[Optional[List[str]], Optional[int]]:
@@ -107,13 +129,48 @@ class LiquidService:
                 itype = "pegin"
             if "issuance" in vin:
                 itype = "issuance"
+            scriptsig = vin.get("scriptSig") if isinstance(vin.get("scriptSig"), dict) else {}
+            is_coinbase_input = "coinbase" in vin
+            scriptsig_hex = scriptsig.get("hex")
+            scriptsig_asm = scriptsig.get("asm")
+            coinbase_hex = vin.get("coinbase") if is_coinbase_input else None
+            if is_coinbase_input and not scriptsig_hex:
+                scriptsig_hex = coinbase_hex
+            if is_coinbase_input and scriptsig_hex:
+                scriptsig_asm = disassemble_script(scriptsig_hex) or scriptsig_asm
+            elif scriptsig_hex and not scriptsig_asm:
+                try:
+                    scriptsig_asm = self.rpc.decodescript(scriptsig_hex).get("asm")
+                except Exception:
+                    scriptsig_asm = disassemble_script(scriptsig_hex)
+
+            witness = vin.get("txinwitness")
+            if witness is None:
+                witness = vin.get("witness")
+
             # Basic fields
             item: Dict[str, Any] = {
                 "txid": vin.get("txid"),
                 "vout": vin.get("vout"),
                 "sequence": vin.get("sequence"),
-                "type": itype,
+                "input_type": itype,
+                "is_coinbase": is_coinbase_input,
+                "scriptsig_asm": scriptsig_asm,
+                "scriptsig_hex": scriptsig_hex,
+                "coinbase_hex": coinbase_hex,
+                "witness": witness,
             }
+            prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
+            if prevout:
+                spk = prevout.get("scriptPubKey", {}) if isinstance(prevout.get("scriptPubKey"), dict) else {}
+                addrs, req_sigs = self._normalize_address_info(spk)
+                item["addresses"] = addrs
+                item["required_signatures"] = req_sigs
+                item["type"] = spk.get("type")
+                item["value"] = prevout.get("value")
+                item["asset"] = prevout.get("asset")
+                item["scriptpubkey_asm"] = spk.get("asm")
+                item["scriptpubkey_hex"] = spk.get("hex")
             # Amounts are not present on inputs here unless enriched
             inputs.append(item)
 
@@ -143,6 +200,10 @@ class LiquidService:
                     output_value_total = (output_value_total or Decimal(0)) + (Decimal(str(value)) if value is not None else Decimal(0))
                 except Exception:
                     pass
+
+            scriptpubkey_hex = spk.get("hex") if isinstance(spk, dict) else None
+            scriptpubkey_asm = spk.get("asm") if isinstance(spk, dict) else None
+            op_return_data_hex = extract_op_return_data_hex(scriptpubkey_hex)
             outputs.append({
                 "value": value,
                 "confidential_value": vcommit,
@@ -151,6 +212,10 @@ class LiquidService:
                 "n": vout.get("n"),
                 "addresses": addrs,
                 "required_signatures": req_sigs,
+                "scriptpubkey_asm": scriptpubkey_asm,
+                "scriptpubkey_hex": scriptpubkey_hex,
+                "script_type": spk.get("type") if isinstance(spk, dict) else None,
+                "op_return_data_hex": op_return_data_hex,
             })
 
         # Totals and fee: only computable if non-confidential
@@ -164,8 +229,16 @@ class LiquidService:
 
         return {
             "hash": t.get("txid") or t.get("hash"),
+            "txid": t.get("txid"),
+            "wtxid": t.get("wtxid"),
+            "withash": t.get("withash"),
+            "tx_hex": t.get("hex"),
             "size": t.get("size"),
             "virtual_size": t.get("vsize"),
+            "discount_virtual_size": t.get("discountvsize"),
+            "weight": t.get("weight"),
+            "discount_weight": t.get("discountweight"),
+            "sigops": t.get("sigops"),
             "version": t.get("version"),
             "lock_time": t.get("locktime"),
             "block_number": block_item.get("number"),
@@ -180,4 +253,6 @@ class LiquidService:
             "input_value": str(input_value_total) if input_value_total is not None else None,
             "output_value": str(output_value_total) if output_value_total is not None else None,
             "fee": fee,
+            "node_fee": t.get("fee"),
+            "raw_tx": t,
         }

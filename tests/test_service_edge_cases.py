@@ -50,10 +50,10 @@ def test_input_types_and_confidential_outputs():
     bundle = s.get_block_by_number(0)
     t = bundle.transactions[0]
     # Input types mapping
-    assert t["inputs"][0]["type"] == "pegin"
-    assert t["inputs"][1]["type"] == "issuance"
+    assert t["inputs"][0]["input_type"] == "pegin"
+    assert t["inputs"][1]["input_type"] == "issuance"
     # When both flags present, issuance takes precedence
-    assert t["inputs"][2]["type"] == "issuance"
+    assert t["inputs"][2]["input_type"] == "issuance"
     # Confidential output and fee behavior
     assert t["outputs"][0]["type"] == "confidential"
     assert t["fee"] is None

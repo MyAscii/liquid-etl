@@ -1,11 +1,16 @@
 import argparse
 import sys
+import time
 
 
 def _add_common_provider(parser: argparse.ArgumentParser):
     parser.add_argument(
         "-p", "--provider-uri", required=True,
         help="JSON-RPC URI, e.g. http://user:pass@localhost:7041"
+    )
+    parser.add_argument(
+        "--datadir",
+        help="Elements/Liquid datadir (optional). Used to read .cookie or elements.conf when provider-uri has no creds.",
     )
 
 
@@ -14,7 +19,7 @@ def _cmd_export_blocks_and_transactions(args: argparse.Namespace) -> int:
     from .service import LiquidService
     from .rpc import LiquidRpc
 
-    rpc = LiquidRpc(args.provider_uri)
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     service = LiquidService(rpc)
     job = ExportBlocksJob(
         service=service,
@@ -32,7 +37,7 @@ def _cmd_enrich_transactions(args: argparse.Namespace) -> int:
     from .rpc import LiquidRpc
     from .service import LiquidService
 
-    rpc = LiquidRpc(args.provider_uri)
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     service = LiquidService(rpc)
     job = EnrichTransactionsJob(
         service=service,
@@ -47,7 +52,7 @@ def _cmd_get_block_range_for_date(args: argparse.Namespace) -> int:
     from .service import LiquidService
     from .rpc import LiquidRpc
 
-    rpc = LiquidRpc(args.provider_uri)
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     service = LiquidService(rpc)
     start, end = service.get_block_range_for_date(args.date, args.start_hour, args.end_hour)
     print(f"{start} {end}")
@@ -59,7 +64,7 @@ def _cmd_export_all(args: argparse.Namespace) -> int:
     from .rpc import LiquidRpc
     from .service import LiquidService
 
-    rpc = LiquidRpc(args.provider_uri)
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     service = LiquidService(rpc)
     export_all(
         service=service,
@@ -89,7 +94,7 @@ def _cmd_stream(args: argparse.Namespace) -> int:
     from .rpc import LiquidRpc
     from .service import LiquidService
 
-    rpc = LiquidRpc(args.provider_uri)
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     service = LiquidService(rpc)
     adapter = LiquidStreamerAdapter(
         service=service,
@@ -121,6 +126,114 @@ def _cmd_load_ndjson_to_sqlite(args: argparse.Namespace) -> int:
                 item = json.loads(line)
                 writer.write_transaction(item)
     writer.close()
+    return 0
+
+
+def _cmd_load_ndjson_to_postgres(args: argparse.Namespace) -> int:
+    from .utils.postgres_writer import PostgresWriter
+    import json
+
+    writer = PostgresWriter(args.dsn)
+    if args.blocks_input:
+        with open(args.blocks_input, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                writer.write_block(item)
+    if args.transactions_input:
+        with open(args.transactions_input, "r", encoding="utf-8") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                item = json.loads(line)
+                writer.write_transaction(item)
+    writer.close()
+    return 0
+
+
+def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
+    from .rpc import LiquidRpc
+    from .utils.postgres_writer_v2 import PostgresWriterV2
+    from .utils.v2_normalizer import normalize_block_v2, normalize_tx_v2
+
+    def _fmt_eta(seconds: float) -> str:
+        if seconds != seconds or seconds == float("inf") or seconds < 0:
+            return "?:??"
+        s = int(seconds)
+        m, s = divmod(s, 60)
+        h, m = divmod(m, 60)
+        if h:
+            return f"{h:d}:{m:02d}:{s:02d}"
+        return f"{m:d}:{s:02d}"
+
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
+    network = rpc.getblockchaininfo().get("chain") or "liquidv1"
+    writer = PostgresWriterV2(args.dsn)
+    total = args.end_block - args.start_block + 1
+    show_progress = bool(getattr(args, "progress", False))
+    if getattr(args, "no_progress", False):
+        show_progress = False
+    if not show_progress:
+        show_progress = bool(sys.stderr.isatty())
+
+    try:
+        started = time.monotonic()
+        last_render = started
+        rpc_batch_size = max(1, int(getattr(args, "rpc_batch_size", 25)))
+
+        heights = list(range(args.start_block, args.end_block + 1))
+        done = 0
+        for off in range(0, len(heights), rpc_batch_size):
+            chunk = heights[off : off + rpc_batch_size]
+            hashes = rpc.batch_call([("getblockhash", [h]) for h in chunk])
+            raw_blocks = rpc.batch_call([("getblock", [bh, 3]) for bh in hashes])
+
+            block_rows = []
+            all_tx_rows = []
+            all_txin_rows = []
+            all_txout_rows = []
+
+            for raw_block in raw_blocks:
+                block_row = normalize_block_v2(raw_block, network=network)
+                block_rows.append(block_row)
+                for tx_index, raw_tx in enumerate(raw_block.get("tx", []) or []):
+                    if not isinstance(raw_tx, dict):
+                        continue
+                    tx_row, txins, txouts = normalize_tx_v2(raw_tx, block_row, tx_index_in_block=tx_index)
+                    all_tx_rows.append(tx_row)
+                    all_txin_rows.extend(txins)
+                    all_txout_rows.extend(txouts)
+
+            writer.write_chunk(block_rows, all_tx_rows, all_txin_rows, all_txout_rows)
+
+            for raw_block in raw_blocks:
+                done += 1
+                if show_progress:
+                    now = time.monotonic()
+                    if done == total or (now - last_render) >= 0.25:
+                        frac = done / total if total else 1.0
+                        width = 30
+                        filled = int(frac * width)
+                        if filled >= width:
+                            bar = "=" * width
+                        else:
+                            bar = ("=" * filled) + ">" + ("." * (width - filled - 1))
+                        elapsed = max(0.001, now - started)
+                        rate = done / elapsed
+                        eta = (total - done) / rate if rate > 0 else float("inf")
+                        height = raw_block.get("height")
+                        msg = (
+                            f"\r[{bar}] {done}/{total} ({frac * 100:5.1f}%) "
+                            f"height={height} {rate:6.1f} blk/s eta={_fmt_eta(eta)}"
+                        )
+                        sys.stderr.write(msg)
+                        sys.stderr.flush()
+                        last_render = now
+    finally:
+        writer.close()
+        if show_progress:
+            sys.stderr.write("\n")
     return 0
 
 
@@ -171,7 +284,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_common_provider(p_stream)
     p_stream.add_argument("--start-block", type=int, required=True)
     p_stream.add_argument("--lag", type=int, default=0)
-    p_stream.add_argument("--output", default="console", help="'console', 'sqlite:///path/to.db' or projects/.../topics/crypto_liquid")
+    p_stream.add_argument(
+        "--output",
+        default="console",
+        help="'console', 'sqlite:///path/to.db', 'postgres://user:pass@host:5432/dbname' or projects/.../topics/crypto_liquid",
+    )
     p_stream.add_argument("--batch-size", type=int, default=100)
     p_stream.add_argument("--poll-interval", type=float, default=2.0)
     p_stream.add_argument("--enrich", action="store_true")
@@ -182,6 +299,24 @@ def build_parser() -> argparse.ArgumentParser:
     p_load.add_argument("--blocks-input", help="Path to blocks NDJSON")
     p_load.add_argument("--transactions-input", help="Path to transactions NDJSON")
     p_load.set_defaults(func=_cmd_load_ndjson_to_sqlite)
+
+    p_load_pg = sub.add_parser("load_ndjson_to_postgres", help="Load NDJSON exports into Postgres")
+    p_load_pg.add_argument("--dsn", required=True, help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl")
+    p_load_pg.add_argument("--blocks-input", help="Path to blocks NDJSON")
+    p_load_pg.add_argument("--transactions-input", help="Path to transactions NDJSON")
+    p_load_pg.set_defaults(func=_cmd_load_ndjson_to_postgres)
+
+    p_ingest_pg = sub.add_parser("ingest_range_to_postgres", help="Directly ingest a block range into Postgres")
+    _add_common_provider(p_ingest_pg)
+    p_ingest_pg.add_argument("-s", "-start", "--start-block", type=int, required=True)
+    p_ingest_pg.add_argument("-e", "-end", "--end-block", type=int, required=True)
+    p_ingest_pg.add_argument("--dsn", required=True, help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl")
+    p_ingest_pg.add_argument("--enrich", action="store_true")
+    p_ingest_pg.add_argument("--rpc-batch-size", type=int, default=25, help="Batch size for RPC calls (reduces round trips)")
+    pbar = p_ingest_pg.add_mutually_exclusive_group(required=False)
+    pbar.add_argument("--progress", action="store_true", help="Force progress output")
+    pbar.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    p_ingest_pg.set_defaults(func=_cmd_ingest_range_to_postgres)
 
     return parser
 
