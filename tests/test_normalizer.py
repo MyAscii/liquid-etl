@@ -1,7 +1,7 @@
-from liquidetl.utils.v2_normalizer import normalize_block_v2, normalize_tx_v2
+from liquidetl.utils.normalizer import normalize_block, normalize_tx
 
 
-def test_v2_normalizer_fee_output_and_confidential_detection():
+def test_normalizer_fee_output_and_confidential_detection():
     raw_block = {
         "hash": "bh",
         "height": 1,
@@ -32,10 +32,10 @@ def test_v2_normalizer_fee_output_and_confidential_detection():
             }
         ],
     }
-    block_row = normalize_block_v2(raw_block, network="liquidv1")
+    block_row = normalize_block(raw_block, network="liquidv1")
     assert block_row["network"] == "liquidv1"
     assert block_row["tx_count"] == 1
-    tx_row, txins, txouts = normalize_tx_v2(raw_block["tx"][0], block_row, tx_index_in_block=0)
+    tx_row, txins, txouts = normalize_tx(raw_block["tx"][0], block_row, tx_index_in_block=0)
     assert tx_row["fee_by_asset"]["assetX"] == 100
     assert tx_row["has_any_confidential"] is True
     assert tx_row["explicit_out_by_asset"]["assetX"] == 100

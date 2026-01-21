@@ -154,8 +154,8 @@ def _cmd_load_ndjson_to_postgres(args: argparse.Namespace) -> int:
 
 def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
     from .rpc import LiquidRpc
-    from .utils.postgres_writer_v2 import PostgresWriterV2
-    from .utils.v2_normalizer import normalize_block_v2, normalize_tx_v2
+    from .utils.postgres_writer import PostgresWriter
+    from .utils.normalizer import normalize_block, normalize_tx
 
     def _fmt_eta(seconds: float) -> str:
         if seconds != seconds or seconds == float("inf") or seconds < 0:
@@ -169,7 +169,7 @@ def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
 
     rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     network = rpc.getblockchaininfo().get("chain") or "liquidv1"
-    writer = PostgresWriterV2(args.dsn)
+    writer = PostgresWriter(args.dsn, network=network)
     total = args.end_block - args.start_block + 1
     show_progress = bool(getattr(args, "progress", False))
     if getattr(args, "no_progress", False):
@@ -186,6 +186,9 @@ def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
         done = 0
         for off in range(0, len(heights), rpc_batch_size):
             chunk = heights[off : off + rpc_batch_size]
+            if show_progress:
+                sys.stderr.write(f"\rFetching batch of {len(chunk)} blocks... ")
+                sys.stderr.flush()
             hashes = rpc.batch_call([("getblockhash", [h]) for h in chunk])
             raw_blocks = rpc.batch_call([("getblock", [bh, 3]) for bh in hashes])
 
@@ -195,12 +198,12 @@ def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
             all_txout_rows = []
 
             for raw_block in raw_blocks:
-                block_row = normalize_block_v2(raw_block, network=network)
+                block_row = normalize_block(raw_block, network=network)
                 block_rows.append(block_row)
                 for tx_index, raw_tx in enumerate(raw_block.get("tx", []) or []):
                     if not isinstance(raw_tx, dict):
                         continue
-                    tx_row, txins, txouts = normalize_tx_v2(raw_tx, block_row, tx_index_in_block=tx_index)
+                    tx_row, txins, txouts = normalize_tx(raw_tx, block_row, tx_index_in_block=tx_index)
                     all_tx_rows.append(tx_row)
                     all_txin_rows.extend(txins)
                     all_txout_rows.extend(txouts)
