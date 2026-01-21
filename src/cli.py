@@ -94,6 +94,27 @@ def _cmd_stream(args: argparse.Namespace) -> int:
     from .rpc import LiquidRpc
     from .service import LiquidService
 
+    start_block = args.start_block
+    if start_block is None:
+        if args.output.startswith("postgres://") or args.output.startswith("postgresql://"):
+            from .utils.postgres_writer import PostgresWriter
+            try:
+                tmp_writer = PostgresWriter(args.output)
+                max_height = tmp_writer.get_max_block_height()
+                tmp_writer.close()
+                if max_height is not None:
+                    start_block = max_height + 1
+                    print(f"Resuming from block {start_block} (DB max height: {max_height})", file=sys.stderr)
+                else:
+                    start_block = 0
+                    print("Database empty, starting from block 0", file=sys.stderr)
+            except Exception as e:
+                print(f"Error checking DB state: {e}", file=sys.stderr)
+                return 1
+        else:
+            print("Error: --start-block is required unless output is a Postgres DB", file=sys.stderr)
+            return 1
+
     rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
     service = LiquidService(rpc)
     adapter = LiquidStreamerAdapter(
@@ -102,7 +123,7 @@ def _cmd_stream(args: argparse.Namespace) -> int:
         batch_size=args.batch_size,
         enrich=args.enrich,
     )
-    adapter.stream(start_block=args.start_block, lag=args.lag, poll_interval=args.poll_interval)
+    adapter.stream(start_block=start_block, lag=args.lag, poll_interval=args.poll_interval)
     return 0
 
 
@@ -285,7 +306,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_stream = sub.add_parser("stream", help="Continuously stream blocks and transactions")
     _add_common_provider(p_stream)
-    p_stream.add_argument("--start-block", type=int, required=True)
+    p_stream.add_argument("--start-block", type=int, required=False, help="Start block (optional for Postgres; resumes from DB max+1)")
     p_stream.add_argument("--lag", type=int, default=0)
     p_stream.add_argument(
         "--output",

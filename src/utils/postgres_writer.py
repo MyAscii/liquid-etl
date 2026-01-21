@@ -186,6 +186,14 @@ class PostgresWriter:
     def _rename_table(self, cur: Any, old: str, new: str) -> None:
         cur.execute(f"ALTER TABLE {old} RENAME TO {new}")
 
+    def get_max_block_height(self) -> Optional[int]:
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT MAX(height) FROM blocks")
+            row = cur.fetchone()
+            if row and row[0] is not None:
+                return int(row[0])
+            return None
+
     def _migrate_tables(self, cur: Any) -> None:
         legacy_blocks = self._table_exists(cur, "blocks") and self._table_has_column(cur, "blocks", "number")
         legacy_transactions = self._table_exists(cur, "transactions") and self._table_has_column(cur, "transactions", "tx_index")
