@@ -42,8 +42,6 @@ def normalize_block(block: Dict[str, Any], network: str) -> Dict[str, Any]:
         "dynafed_proposed_params": block.get("proposed_federation") or block.get("proposed_params"),
         "signblock_witness": block.get("signblock_witness"),
         "txids": txids,
-        "raw_block_hex": None,
-        "raw_block_json": block,
     }
 
 
@@ -137,8 +135,6 @@ def normalize_tx(
         "has_pegin": has_pegin,
         "has_pegout": has_pegout,
         "has_issuance": has_issuance,
-        "raw_tx_hex": tx.get("hex"),
-        "raw_tx_json": tx,
     }
 
     txins: List[Dict[str, Any]] = []
@@ -254,4 +250,3 @@ def normalize_tx(
         )
 
     return tx_row, txins, txouts
-

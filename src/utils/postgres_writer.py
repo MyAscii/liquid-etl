@@ -49,9 +49,7 @@ class PostgresWriter:
                     dynafed_current_params JSONB,
                     dynafed_proposed_params JSONB,
                     signblock_witness JSONB,
-                    txids JSONB,
-                    raw_block_hex TEXT,
-                    raw_block_json JSONB
+                    txids JSONB
                 )
                 """
             )
@@ -83,9 +81,7 @@ class PostgresWriter:
                     has_any_confidential BOOLEAN,
                     has_pegin BOOLEAN,
                     has_pegout BOOLEAN,
-                    has_issuance BOOLEAN,
-                    raw_tx_hex TEXT,
-                    raw_tx_json JSONB
+                    has_issuance BOOLEAN
                 )
                 """
             )
@@ -166,6 +162,10 @@ class PostgresWriter:
             cur.execute("CREATE INDEX IF NOT EXISTS transactions_block_height_idx ON transactions (block_height)")
             cur.execute("CREATE INDEX IF NOT EXISTS txins_prev_outpoint_idx ON txins (prev_txid, prev_vout)")
             cur.execute("CREATE INDEX IF NOT EXISTS txouts_asset_id_idx ON txouts (asset_id)")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS raw_block_hex")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS raw_block_json")
+            cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS raw_tx_hex")
+            cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS raw_tx_json")
 
     def _table_exists(self, cur: Any, name: str) -> bool:
         cur.execute("SELECT to_regclass(%s)", (f"public.{name}",))
@@ -253,12 +253,36 @@ class PostgresWriter:
                 self.write_txouts(txouts)
 
     def _coerce_block_row(self, block: Dict[str, Any]) -> Dict[str, Any]:
-        if "raw_block_json" in block and "height" in block:
-            return block
+        raw = block.get("raw_block") if isinstance(block.get("raw_block"), dict) else None
 
-        raw = block.get("raw_block")
-        if not isinstance(raw, dict):
-            raw = block
+        difficulty = block.get("difficulty")
+        if difficulty is None and isinstance(raw, dict):
+            difficulty = raw.get("difficulty")
+
+        chainwork = block.get("chainwork")
+        if chainwork is None and isinstance(raw, dict):
+            chainwork = raw.get("chainwork")
+
+        dynafed_current_params = block.get("dynafed_current_params")
+        if dynafed_current_params is None and isinstance(raw, dict):
+            dynafed_current_params = raw.get("current_federation") or raw.get("current_params")
+
+        dynafed_proposed_params = block.get("dynafed_proposed_params")
+        if dynafed_proposed_params is None and isinstance(raw, dict):
+            dynafed_proposed_params = raw.get("proposed_federation") or raw.get("proposed_params")
+
+        signblock_witness = block.get("signblock_witness")
+        if signblock_witness is None and isinstance(raw, dict):
+            signblock_witness = raw.get("signblock_witness")
+
+        txids = block.get("txids")
+        if txids is None and isinstance(raw, dict) and isinstance(raw.get("tx"), list):
+            txids = []
+            for t in raw.get("tx") or []:
+                if isinstance(t, str):
+                    txids.append(t)
+                elif isinstance(t, dict) and t.get("txid"):
+                    txids.append(t.get("txid"))
 
         extdata_type = None
         if block.get("signblock_challenge") or block.get("signblock_witness_hex") or block.get("signblock_witness_asm"):
@@ -276,8 +300,8 @@ class PostgresWriter:
             "median_time": block.get("median_time"),
             "nonce": block.get("nonce"),
             "bits": block.get("bits"),
-            "difficulty": raw.get("difficulty") if isinstance(raw, dict) else None,
-            "chainwork": raw.get("chainwork") if isinstance(raw, dict) else None,
+            "difficulty": difficulty,
+            "chainwork": chainwork,
             "tx_count": block.get("transaction_count"),
             "size": block.get("size"),
             "stripped_size": block.get("stripped_size"),
@@ -285,21 +309,15 @@ class PostgresWriter:
             "extdata_type": extdata_type,
             "signblock_challenge_hex": block.get("signblock_challenge"),
             "signblock_solution_hex": block.get("signblock_witness_hex"),
-            "dynafed_current_params": raw.get("current_federation") or raw.get("current_params") if isinstance(raw, dict) else None,
-            "dynafed_proposed_params": raw.get("proposed_federation") or raw.get("proposed_params") if isinstance(raw, dict) else None,
-            "signblock_witness": raw.get("signblock_witness") if isinstance(raw, dict) else None,
-            "txids": None,
-            "raw_block_hex": None,
-            "raw_block_json": raw,
+            "dynafed_current_params": dynafed_current_params,
+            "dynafed_proposed_params": dynafed_proposed_params,
+            "signblock_witness": signblock_witness,
+            "txids": txids,
         }
 
     def _coerce_tx_rows(self, tx: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
         if "vin" in tx and "vout" in tx:
             raise ValueError("write_transaction expects normalized transaction items; use ingest_range_to_postgres for raw blocks")
-
-        raw = tx.get("raw_tx")
-        if not isinstance(raw, dict):
-            raw = tx
 
         inputs = tx.get("inputs", []) or []
         outputs = tx.get("outputs", []) or []
@@ -336,8 +354,6 @@ class PostgresWriter:
             "has_pegin": bool(has_pegin),
             "has_pegout": bool(has_pegout),
             "has_issuance": bool(has_issuance),
-            "raw_tx_hex": tx.get("tx_hex"),
-            "raw_tx_json": raw,
         }
 
         txins: List[Dict[str, Any]] = []
@@ -443,7 +459,6 @@ class PostgresWriter:
                     "dynafed_proposed_params": json.dumps(b.get("dynafed_proposed_params"), default=str) if b.get("dynafed_proposed_params") is not None else None,
                     "signblock_witness": json.dumps(b.get("signblock_witness"), default=str) if b.get("signblock_witness") is not None else None,
                     "txids": json.dumps(b.get("txids"), default=str) if b.get("txids") is not None else None,
-                    "raw_block_json": json.dumps(b.get("raw_block_json"), default=str) if b.get("raw_block_json") is not None else None,
                 }
             )
         if not payloads:
@@ -457,14 +472,14 @@ class PostgresWriter:
                     tx_count, size, stripped_size, weight,
                     extdata_type, signblock_challenge_hex, signblock_solution_hex,
                     dynafed_current_params, dynafed_proposed_params, signblock_witness,
-                    txids, raw_block_hex, raw_block_json
+                    txids
                 ) VALUES (
                     %(network)s, %(hash)s, %(height)s, %(version)s, %(prev_block_hash)s, %(next_block_hash)s,
                     %(merkle_root)s, %(time)s, %(median_time)s, %(nonce)s, %(bits)s, %(difficulty)s, %(chainwork)s,
                     %(tx_count)s, %(size)s, %(stripped_size)s, %(weight)s,
                     %(extdata_type)s, %(signblock_challenge_hex)s, %(signblock_solution_hex)s,
                     %(dynafed_current_params)s::jsonb, %(dynafed_proposed_params)s::jsonb, %(signblock_witness)s::jsonb,
-                    %(txids)s::jsonb, %(raw_block_hex)s, %(raw_block_json)s::jsonb
+                    %(txids)s::jsonb
                 )
                 ON CONFLICT (hash) DO UPDATE SET
                     network = EXCLUDED.network,
@@ -489,9 +504,7 @@ class PostgresWriter:
                     dynafed_current_params = EXCLUDED.dynafed_current_params,
                     dynafed_proposed_params = EXCLUDED.dynafed_proposed_params,
                     signblock_witness = EXCLUDED.signblock_witness,
-                    txids = EXCLUDED.txids,
-                    raw_block_hex = EXCLUDED.raw_block_hex,
-                    raw_block_json = EXCLUDED.raw_block_json
+                    txids = EXCLUDED.txids
                 """,
                 payloads,
             )
@@ -505,7 +518,6 @@ class PostgresWriter:
                     "fee_by_asset": json.dumps(t.get("fee_by_asset"), default=str) if t.get("fee_by_asset") is not None else None,
                     "explicit_in_by_asset": json.dumps(t.get("explicit_in_by_asset"), default=str) if t.get("explicit_in_by_asset") is not None else None,
                     "explicit_out_by_asset": json.dumps(t.get("explicit_out_by_asset"), default=str) if t.get("explicit_out_by_asset") is not None else None,
-                    "raw_tx_json": json.dumps(t.get("raw_tx_json"), default=str) if t.get("raw_tx_json") is not None else None,
                 }
             )
         if not payloads:
@@ -519,16 +531,14 @@ class PostgresWriter:
                     version, lock_time, size, vsize, weight, discount_vsize, discount_weight,
                     vin_count, vout_count,
                     fee_by_asset, explicit_in_by_asset, explicit_out_by_asset,
-                    has_any_confidential, has_pegin, has_pegout, has_issuance,
-                    raw_tx_hex, raw_tx_json
+                    has_any_confidential, has_pegin, has_pegout, has_issuance
                 ) VALUES (
                     %(network)s, %(txid)s, %(wtxid)s, %(hash)s, %(withash)s,
                     %(block_hash)s, %(block_height)s, %(block_time)s, %(tx_index_in_block)s, %(confirmed)s,
                     %(version)s, %(lock_time)s, %(size)s, %(vsize)s, %(weight)s, %(discount_vsize)s, %(discount_weight)s,
                     %(vin_count)s, %(vout_count)s,
                     %(fee_by_asset)s::jsonb, %(explicit_in_by_asset)s::jsonb, %(explicit_out_by_asset)s::jsonb,
-                    %(has_any_confidential)s, %(has_pegin)s, %(has_pegout)s, %(has_issuance)s,
-                    %(raw_tx_hex)s, %(raw_tx_json)s::jsonb
+                    %(has_any_confidential)s, %(has_pegin)s, %(has_pegout)s, %(has_issuance)s
                 )
                 ON CONFLICT (txid) DO UPDATE SET
                     network = EXCLUDED.network,
@@ -555,9 +565,7 @@ class PostgresWriter:
                     has_any_confidential = EXCLUDED.has_any_confidential,
                     has_pegin = EXCLUDED.has_pegin,
                     has_pegout = EXCLUDED.has_pegout,
-                    has_issuance = EXCLUDED.has_issuance,
-                    raw_tx_hex = EXCLUDED.raw_tx_hex,
-                    raw_tx_json = EXCLUDED.raw_tx_json
+                    has_issuance = EXCLUDED.has_issuance
                 """,
                 payloads,
             )

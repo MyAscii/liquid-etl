@@ -86,6 +86,12 @@ class LiquidService:
     # ---- Normalization helpers ----
     def _normalize_block(self, b: Dict[str, Any]) -> Dict[str, Any]:
         # Elements block fields closely mirror Bitcoin
+        txids = []
+        for t in b.get("tx", []) or []:
+            if isinstance(t, str):
+                txids.append(t)
+            elif isinstance(t, dict) and t.get("txid"):
+                txids.append(t.get("txid"))
         return {
             "hash": b.get("hash"),
             "confirmations": b.get("confirmations"),
@@ -100,13 +106,18 @@ class LiquidService:
             "median_time": b.get("mediantime"),
             "nonce": b.get("nonce"),
             "bits": b.get("bits"),
+            "difficulty": b.get("difficulty"),
+            "chainwork": b.get("chainwork"),
             "previous_block_hash": b.get("previousblockhash"),
             "next_block_hash": b.get("nextblockhash"),
             "transaction_count": b.get("nTx") if b.get("nTx") is not None else len(b.get("tx", [])),
             "signblock_challenge": b.get("signblock_challenge"),
             "signblock_witness_asm": b.get("signblock_witness_asm"),
             "signblock_witness_hex": b.get("signblock_witness_hex"),
-            "raw_block": b,
+            "dynafed_current_params": b.get("current_federation") or b.get("current_params"),
+            "dynafed_proposed_params": b.get("proposed_federation") or b.get("proposed_params"),
+            "signblock_witness": b.get("signblock_witness"),
+            "txids": txids,
         }
 
     def _normalize_address_info(self, spk: Dict[str, Any]) -> Tuple[Optional[List[str]], Optional[int]]:
@@ -254,5 +265,4 @@ class LiquidService:
             "output_value": str(output_value_total) if output_value_total is not None else None,
             "fee": fee,
             "node_fee": t.get("fee"),
-            "raw_tx": t,
         }

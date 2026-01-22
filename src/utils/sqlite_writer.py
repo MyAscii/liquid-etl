@@ -32,8 +32,7 @@ class SQLiteWriter:
                 transaction_count INTEGER,
                 signblock_challenge TEXT,
                 signblock_witness_asm TEXT,
-                signblock_witness_hex TEXT,
-                raw_block TEXT
+                signblock_witness_hex TEXT
             )
             """
         )
@@ -66,7 +65,6 @@ class SQLiteWriter:
                 node_fee TEXT,
                 inputs TEXT,
                 outputs TEXT,
-                raw_tx TEXT,
                 PRIMARY KEY (hash, "index")
             )
             """
@@ -84,7 +82,6 @@ class SQLiteWriter:
                 "signblock_challenge": "TEXT",
                 "signblock_witness_asm": "TEXT",
                 "signblock_witness_hex": "TEXT",
-                "raw_block": "TEXT",
             },
         )
         self._ensure_columns(
@@ -97,7 +94,6 @@ class SQLiteWriter:
                 "discount_virtual_size": "REAL",
                 "discount_weight": "INTEGER",
                 "node_fee": "TEXT",
-                "raw_tx": "TEXT",
             },
         )
         return
@@ -128,16 +124,14 @@ class SQLiteWriter:
                 version, version_hex, merkle_root, nonce, bits,
                 previous_block_hash, next_block_hash,
                 transaction_count,
-                signblock_challenge, signblock_witness_asm, signblock_witness_hex,
-                raw_block
+                signblock_challenge, signblock_witness_asm, signblock_witness_hex
             ) VALUES (
                 :hash, :number, :timestamp, :median_time, :confirmations,
                 :size, :stripped_size, :weight,
                 :version, :version_hex, :merkle_root, :nonce, :bits,
                 :previous_block_hash, :next_block_hash,
                 :transaction_count,
-                :signblock_challenge, :signblock_witness_asm, :signblock_witness_hex,
-                :raw_block
+                :signblock_challenge, :signblock_witness_asm, :signblock_witness_hex
             )
             ON CONFLICT(hash) DO UPDATE SET
                 number=excluded.number,
@@ -157,8 +151,7 @@ class SQLiteWriter:
                 transaction_count=excluded.transaction_count,
                 signblock_challenge=excluded.signblock_challenge,
                 signblock_witness_asm=excluded.signblock_witness_asm,
-                signblock_witness_hex=excluded.signblock_witness_hex,
-                raw_block=excluded.raw_block
+                signblock_witness_hex=excluded.signblock_witness_hex
             """,
             {
                 "hash": block.get("hash") or block.get("item_id"),
@@ -180,7 +173,6 @@ class SQLiteWriter:
                 "signblock_challenge": block.get("signblock_challenge"),
                 "signblock_witness_asm": block.get("signblock_witness_asm"),
                 "signblock_witness_hex": block.get("signblock_witness_hex"),
-                "raw_block": json.dumps(block.get("raw_block"), default=str) if block.get("raw_block") is not None else None,
             },
         )
         cur.close()
@@ -197,8 +189,7 @@ class SQLiteWriter:
                 input_count, output_count, input_value, output_value, fee,
                 node_fee,
                 inputs, outputs,
-                weight, discount_weight, sigops,
-                raw_tx
+                weight, discount_weight, sigops
             ) VALUES (
                 :hash, :txid, :wtxid, :withash, :tx_hex,
                 :index, :block_hash, :block_number, :block_timestamp,
@@ -207,8 +198,7 @@ class SQLiteWriter:
                 :input_count, :output_count, :input_value, :output_value, :fee,
                 :node_fee,
                 :inputs, :outputs,
-                :weight, :discount_weight, :sigops,
-                :raw_tx
+                :weight, :discount_weight, :sigops
             )
             ON CONFLICT(hash, "index") DO UPDATE SET
                 txid=excluded.txid,
@@ -234,8 +224,7 @@ class SQLiteWriter:
                 outputs=excluded.outputs,
                 weight=excluded.weight,
                 discount_weight=excluded.discount_weight,
-                sigops=excluded.sigops,
-                raw_tx=excluded.raw_tx
+                sigops=excluded.sigops
             """,
             {
                 "hash": tx.get("hash") or tx.get("item_id"),
@@ -264,7 +253,6 @@ class SQLiteWriter:
                 "node_fee": json.dumps(tx.get("node_fee"), default=str) if tx.get("node_fee") is not None else None,
                 "inputs": json.dumps(tx.get("inputs", []), default=str),
                 "outputs": json.dumps(tx.get("outputs", []), default=str),
-                "raw_tx": json.dumps(tx.get("raw_tx"), default=str) if tx.get("raw_tx") is not None else None,
             },
         )
         cur.close()

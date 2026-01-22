@@ -23,7 +23,6 @@ BLOCK_SCHEMA_KEYS = [
     "signblock_challenge",
     "signblock_witness_asm",
     "signblock_witness_hex",
-    "raw_block",
 ]
 
 TRANSACTION_SCHEMA_KEYS = [
@@ -53,5 +52,4 @@ TRANSACTION_SCHEMA_KEYS = [
     "output_value",
     "fee",
     "node_fee",
-    "raw_tx",
 ]
