@@ -261,6 +261,258 @@ def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_repair_postgres(args: argparse.Namespace) -> int:
+    from .utils.postgres_writer import PostgresWriter
+    from .utils.normalizer import normalize_block, normalize_tx
+
+    def _fmt_eta(seconds: float) -> str:
+        if seconds != seconds or seconds == float("inf") or seconds < 0:
+            return "?:??"
+        s = int(seconds)
+        m, s = divmod(s, 60)
+        h, m = divmod(m, 60)
+        if h:
+            return f"{h:d}:{m:02d}:{s:02d}"
+        return f"{m:d}:{s:02d}"
+
+    dedupe = not bool(getattr(args, "no_dedupe", False))
+    fill_gaps = not bool(getattr(args, "no_fill_gaps", False))
+
+    network = args.network or "liquidv1"
+    rpc = None
+
+    writer = PostgresWriter(args.dsn, network=network)
+    show_progress = bool(getattr(args, "progress", False))
+    if getattr(args, "no_progress", False):
+        show_progress = False
+    if not show_progress:
+        show_progress = bool(sys.stderr.isatty())
+
+    def _db_height_bounds():
+        with writer.conn.cursor() as cur:
+            cur.execute(
+                "SELECT MIN(height), MAX(height) FROM blocks WHERE network=%s AND height IS NOT NULL",
+                (network,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return None, None
+            lo, hi = row[0], row[1]
+            return (int(lo) if lo is not None else None, int(hi) if hi is not None else None)
+
+    db_lo, db_hi = _db_height_bounds()
+    if db_lo is None or db_hi is None:
+        print("No blocks in DB to repair", file=sys.stderr)
+        writer.close()
+        return 0
+
+    start_h = int(args.start_block) if args.start_block is not None else db_lo
+    end_h = int(args.end_block) if args.end_block is not None else db_hi
+    if end_h < start_h:
+        start_h, end_h = end_h, start_h
+
+    try:
+        if dedupe:
+            with writer.conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT height, COUNT(*) AS c
+                    FROM blocks
+                    WHERE network=%s AND height IS NOT NULL AND height BETWEEN %s AND %s
+                    GROUP BY height
+                    HAVING COUNT(*) > 1
+                    ORDER BY height
+                    """,
+                    (network, start_h, end_h),
+                )
+                dup_heights = [(int(r[0]), int(r[1])) for r in (cur.fetchall() or [])]
+
+            if dup_heights:
+                print(f"Found {len(dup_heights)} duplicate heights in blocks", file=sys.stderr)
+            else:
+                print("No duplicate heights found in blocks", file=sys.stderr)
+
+            for h, _ in dup_heights:
+                with writer.conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT b.hash
+                        FROM blocks b
+                        LEFT JOIN transactions t ON t.block_hash = b.hash
+                        WHERE b.network=%s AND b.height=%s
+                        GROUP BY b.hash
+                        ORDER BY COUNT(t.txid) DESC, MAX(b.time) DESC NULLS LAST, b.hash DESC
+                        LIMIT 1
+                        """,
+                        (network, h),
+                    )
+                    keep_hash = cur.fetchone()[0]
+                    cur.execute(
+                        "SELECT hash FROM blocks WHERE network=%s AND height=%s AND hash <> %s",
+                        (network, h, keep_hash),
+                    )
+                    delete_hashes = [r[0] for r in (cur.fetchall() or [])]
+
+                if not delete_hashes:
+                    continue
+
+                if args.dry_run:
+                    print(f"[dry-run] height={h} keep={keep_hash} delete={len(delete_hashes)} blocks", file=sys.stderr)
+                    continue
+
+                with writer.conn.transaction():
+                    with writer.conn.cursor() as cur:
+                        cur.execute(
+                            "SELECT txid FROM transactions WHERE network=%s AND block_hash = ANY(%s)",
+                            (network, delete_hashes),
+                        )
+                        txids = [r[0] for r in (cur.fetchall() or [])]
+                        if txids:
+                            cur.execute("DELETE FROM txins WHERE network=%s AND txid = ANY(%s)", (network, txids))
+                            cur.execute("DELETE FROM txouts WHERE network=%s AND txid = ANY(%s)", (network, txids))
+                            cur.execute("DELETE FROM transactions WHERE network=%s AND txid = ANY(%s)", (network, txids))
+                        cur.execute(
+                            "DELETE FROM blocks WHERE network=%s AND hash = ANY(%s)",
+                            (network, delete_hashes),
+                        )
+                print(f"Deduped height={h}: kept={keep_hash}, removed_blocks={len(delete_hashes)}", file=sys.stderr)
+
+        if fill_gaps:
+            with writer.conn.cursor() as cur:
+                cur.execute(
+                    "SELECT MIN(height), MAX(height) FROM blocks WHERE network=%s AND height IS NOT NULL AND height BETWEEN %s AND %s",
+                    (network, start_h, end_h),
+                )
+                row = cur.fetchone() or (None, None)
+                present_min = int(row[0]) if row[0] is not None else None
+                present_max = int(row[1]) if row[1] is not None else None
+                cur.execute(
+                    """
+                    WITH heights AS (
+                        SELECT DISTINCT height
+                        FROM blocks
+                        WHERE network=%s AND height IS NOT NULL AND height BETWEEN %s AND %s
+                    ),
+                    ordered AS (
+                        SELECT height, LEAD(height) OVER (ORDER BY height) AS next_height
+                        FROM heights
+                    )
+                    SELECT height + 1 AS start_missing, next_height - 1 AS end_missing
+                    FROM ordered
+                    WHERE next_height IS NOT NULL AND next_height > height + 1
+                    ORDER BY start_missing
+                    """,
+                    (network, start_h, end_h),
+                )
+                gaps = [(int(r[0]), int(r[1])) for r in (cur.fetchall() or [])]
+
+            if present_min is not None and start_h < present_min:
+                gaps = [(start_h, present_min - 1), *gaps]
+            if present_max is not None and present_max < end_h:
+                gaps = [*gaps, (present_max + 1, end_h)]
+
+            gaps.sort(key=lambda x: x[0])
+            merged = []
+            for a, b in gaps:
+                if not merged:
+                    merged.append([a, b])
+                    continue
+                prev = merged[-1]
+                if a <= prev[1] + 1:
+                    prev[1] = max(prev[1], b)
+                else:
+                    merged.append([a, b])
+            gaps = [(a, b) for a, b in merged]
+
+            if gaps:
+                missing_blocks = sum((b - a + 1) for a, b in gaps)
+                print(f"Found {missing_blocks} missing blocks in {len(gaps)} gaps", file=sys.stderr)
+            else:
+                print("No missing block gaps found", file=sys.stderr)
+
+            if args.dry_run:
+                for a, b in gaps[:50]:
+                    if a == b:
+                        print(f"[dry-run] missing height={a}", file=sys.stderr)
+                    else:
+                        print(f"[dry-run] missing heights {a}..{b}", file=sys.stderr)
+                if len(gaps) > 50:
+                    print(f"[dry-run] ... {len(gaps) - 50} more gaps", file=sys.stderr)
+                return 0
+
+            if rpc is None:
+                from .rpc import LiquidRpc
+                provider_uri = getattr(args, "provider_uri", None)
+                if not provider_uri:
+                    print("Error: --provider-uri is required to fill gaps (or use --dry-run / --no-fill-gaps)", file=sys.stderr)
+                    return 1
+                try:
+                    rpc = LiquidRpc(provider_uri, datadir=getattr(args, "datadir", None))
+                except Exception as e:
+                    print(f"Error: cannot connect to provider ({provider_uri}): {e}", file=sys.stderr)
+                    print("Tip: start your node, or run with --dry-run / --no-fill-gaps", file=sys.stderr)
+                    return 1
+
+            started = time.monotonic()
+            last_render = started
+            rpc_batch_size = max(1, int(getattr(args, "rpc_batch_size", 25)))
+
+            for a, b in gaps:
+                heights = list(range(a, b + 1))
+                total = len(heights)
+                done = 0
+                for off in range(0, len(heights), rpc_batch_size):
+                    chunk = heights[off : off + rpc_batch_size]
+                    if show_progress:
+                        sys.stderr.write(f"\rFetching batch of {len(chunk)} blocks... ")
+                        sys.stderr.flush()
+                    hashes = rpc.batch_call([("getblockhash", [h]) for h in chunk])
+                    raw_blocks = rpc.batch_call([("getblock", [bh, 3]) for bh in hashes])
+
+                    block_rows = []
+                    all_tx_rows = []
+                    all_txin_rows = []
+                    all_txout_rows = []
+
+                    for raw_block in raw_blocks:
+                        block_row = normalize_block(raw_block, network=network)
+                        block_rows.append(block_row)
+                        for tx_index, raw_tx in enumerate(raw_block.get("tx", []) or []):
+                            if not isinstance(raw_tx, dict):
+                                continue
+                            tx_row, txins, txouts = normalize_tx(raw_tx, block_row, tx_index_in_block=tx_index)
+                            all_tx_rows.append(tx_row)
+                            all_txin_rows.extend(txins)
+                            all_txout_rows.extend(txouts)
+
+                    writer.write_chunk(block_rows, all_tx_rows, all_txin_rows, all_txout_rows)
+
+                    done += len(raw_blocks)
+                    if show_progress:
+                        now = time.monotonic()
+                        if done == total or (now - last_render) >= 0.25:
+                            frac = done / total if total else 1.0
+                            width = 30
+                            filled = int(frac * width)
+                            if filled >= width:
+                                bar = "=" * width
+                            else:
+                                bar = ("=" * filled) + ">" + ("." * (width - filled - 1))
+                            elapsed = max(0.001, now - started)
+                            rate = done / elapsed
+                            eta = (total - done) / rate if rate > 0 else float("inf")
+                            msg = f"\r[{bar}] filled {done}/{total} ({frac * 100:5.1f}%) {rate:6.1f} blk/s eta={_fmt_eta(eta)}"
+                            sys.stderr.write(msg)
+                            sys.stderr.flush()
+                            last_render = now
+                if show_progress:
+                    sys.stderr.write("\n")
+            return 0
+        return 0
+    finally:
+        writer.close()
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="liquidetl", description="Liquid Network ETL and streaming toolkit")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -341,6 +593,30 @@ def build_parser() -> argparse.ArgumentParser:
     pbar.add_argument("--progress", action="store_true", help="Force progress output")
     pbar.add_argument("--no-progress", action="store_true", help="Disable progress output")
     p_ingest_pg.set_defaults(func=_cmd_ingest_range_to_postgres)
+
+    p_repair_pg = sub.add_parser("repair_postgres", help="Fix duplicates and fill missing block gaps in Postgres")
+    p_repair_pg.add_argument(
+        "-p",
+        "--provider-uri",
+        required=False,
+        help="JSON-RPC URI (required only when actually filling gaps), e.g. http://user:pass@localhost:7041",
+    )
+    p_repair_pg.add_argument(
+        "--datadir",
+        help="Elements/Liquid datadir (optional). Used to read .cookie or elements.conf when provider-uri has no creds.",
+    )
+    p_repair_pg.add_argument("--dsn", required=True, help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl")
+    p_repair_pg.add_argument("--network", help="Network label stored in DB (default: liquidv1)")
+    p_repair_pg.add_argument("--start-block", type=int, help="Only repair >= this height (default: DB min)")
+    p_repair_pg.add_argument("--end-block", type=int, help="Only repair <= this height (default: DB max)")
+    p_repair_pg.add_argument("--dry-run", action="store_true", help="Report gaps/dupes but do not change DB")
+    p_repair_pg.add_argument("--no-dedupe", action="store_true", help="Skip duplicate-height cleanup")
+    p_repair_pg.add_argument("--no-fill-gaps", action="store_true", help="Skip filling missing heights")
+    p_repair_pg.add_argument("--rpc-batch-size", type=int, default=25, help="Batch size for RPC calls (reduces round trips)")
+    pbar2 = p_repair_pg.add_mutually_exclusive_group(required=False)
+    pbar2.add_argument("--progress", action="store_true", help="Force progress output")
+    pbar2.add_argument("--no-progress", action="store_true", help="Disable progress output")
+    p_repair_pg.set_defaults(func=_cmd_repair_postgres)
 
     return parser
 
