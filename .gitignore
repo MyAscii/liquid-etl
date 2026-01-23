@@ -13,7 +13,7 @@ ENV/
 
 # IDE/editor
 .vscode/
-.trea/
+.trae/
 .idea/
 *.swp
 
