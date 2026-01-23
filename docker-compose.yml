@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: liquidetl
+      POSTGRES_PASSWORD: liquidetl
+      POSTGRES_DB: liquidetl
+    ports:
+      - "5433:5432"
+    volumes:
+      - liquidetl_pg:/var/lib/postgresql/data
+
+volumes:
+  liquidetl_pg:

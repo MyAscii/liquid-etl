@@ -18,8 +18,6 @@ class StubRpc:
             "version": 2,
             "merkleroot": "m",
             "time": 1000 + int(block_hash[1:]) if block_hash.startswith("h") else 1000,
-            "nonce": 0,
-            "bits": "1d00ffff",
             "tx": [
                 {
                     "txid": "t1",
@@ -27,13 +25,27 @@ class StubRpc:
                     "vsize": 90,
                     "version": 2,
                     "locktime": 0,
-                    "vin": [{"txid": "prev", "vout": 0, "sequence": 0}],
+                    "vin": [
+                        {
+                            "txid": "prev",
+                            "vout": 0,
+                            "sequence": 0,
+                            "issuance": {
+                                "assetBlindingNonce": "00",
+                                "assetEntropy": "11",
+                                "assetamount": "1.0",
+                                "tokenamount": "2.0",
+                                "assetamountcommitment": "aa",
+                                "tokenamountcommitment": "bb",
+                            },
+                        }
+                    ],
                     "vout": [
                         {
                             "n": 0,
                             "value": 0.1234,
                             "asset": "assetid",
-                            "scriptPubKey": {"addresses": ["el1..."], "reqSigs": 1},
+                            "scriptPubKey": {"addresses": ["el1..."], "reqSigs": 1, "type": "fee"},
                         }
                     ],
                 },
@@ -43,14 +55,32 @@ class StubRpc:
                     "vsize": 90,
                     "version": 2,
                     "locktime": 0,
-                    "vin": [{"txid": "prev2", "vout": 1, "sequence": 0}],
+                    "vin": [
+                        {
+                            "txid": "prev2",
+                            "vout": 1,
+                            "sequence": 0,
+                            "is_pegin": True,
+                            "pegin_genesis_hash": "00",
+                            "pegin_claim_script": "51",
+                            "pegin_tx": "aa",
+                            "pegin_txout_proof": "bb",
+                            "pegin_blockhash": "cc",
+                            "pegin_value": "0.5",
+                            "pegin_asset": "assetid",
+                        }
+                    ],
                     "vout": [
                         {
                             "n": 0,
                             "value": None,
                             "valuecommitment": "comm",
                             "assetcommitment": "acomm",
-                            "scriptPubKey": {"address": "el1abc"},
+                            "nonce": "02",
+                            "surjectionproof": "sp",
+                            "rangeproof": "rp",
+                            "pegout": {"genesis_hash": "00", "scriptpubkey": "0014", "value": "0.0001", "asset": "assetid", "extra_data": "ee"},
+                            "scriptPubKey": {"address": "el1abc", "type": "pegout", "hex": "0014"},
                         }
                     ],
                 },
@@ -72,7 +102,11 @@ def test_get_block_by_number_normalizes():
     assert t1["fee"] is None
     # Confidential mapping
     t2 = bundle.transactions[1]
-    assert t2["outputs"][0]["type"] == "confidential"
+    assert t2["outputs"][0]["type"] == "pegout"
+    assert t2["inputs"][0]["input_type"] == "pegin"
+    assert t2["inputs"][0]["pegin_genesis_hash"] == "00"
+    assert t1["inputs"][0]["input_type"] == "issuance"
+    assert isinstance(t1["inputs"][0]["issuance"], dict)
 
 
 def test_get_block_range_for_date_binary_search(monkeypatch):

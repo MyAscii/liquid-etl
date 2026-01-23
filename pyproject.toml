@@ -24,6 +24,9 @@ dependencies = [
 streaming = [
   "google-cloud-pubsub>=2.18.0",
 ]
+postgres = [
+  "psycopg[binary]>=3.2.0",
+]
 dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
@@ -40,3 +43,11 @@ packages = [
   "liquidetl.utils",
 ]
 package-dir = { "liquidetl" = "src" }
+
+[tool.pytest.ini_options]
+markers = [
+  "smoke: fast sanity tests",
+  "functional: functional tests with stubbed dependencies",
+  "integration: tests that require external services (opt-in via env vars)",
+  "e2e: end-to-end tests (opt-in via env vars)",
+]

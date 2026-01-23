@@ -7,6 +7,8 @@ from urllib.parse import urlparse
 
 import requests
 
+from .utils.elements_auth import resolve_rpc_auth
+
 
 class RpcError(RuntimeError):
     pass
@@ -20,7 +22,7 @@ class LiquidRpc:
     - Accepts URIs like http://user:pass@host:7041.
     """
 
-    def __init__(self, provider_uri: str, timeout: float = 30.0):
+    def __init__(self, provider_uri: str, timeout: float = 30.0, datadir: Optional[str] = None):
         self._provider_uri = provider_uri
         self._timeout = timeout
         self._session = requests.Session()
@@ -29,6 +31,10 @@ class LiquidRpc:
         self._url = f"{parsed.scheme}://{parsed.hostname}:{parsed.port or 7041}"
         if parsed.username or parsed.password:
             self._session.auth = (parsed.username or "", parsed.password or "")
+        elif datadir:
+            auth = resolve_rpc_auth(datadir)
+            if auth:
+                self._session.auth = auth
 
         # Elements/Bitcoin JSON-RPC typically requires 'application/json'
         self._headers = {"Content-Type": "application/json"}
@@ -79,3 +85,6 @@ class LiquidRpc:
 
     def getblockchaininfo(self) -> Dict[str, Any]:
         return self.call("getblockchaininfo", [])
+
+    def decodescript(self, script_hex: str) -> Dict[str, Any]:
+        return self.call("decodescript", [script_hex])
