@@ -2,31 +2,13 @@ import json
 import sqlite3
 
 from liquidetl.cli import main as cli_main
-from liquidetl.service import BlockWithTxs, LiquidService
 from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
 
 
-class StubService(LiquidService):
-    def __init__(self):
-        class _R:
-            pass
-
-        super().__init__(_R())
-
-    def get_head_height(self):
-        return 0
-
-    def get_block_by_number(self, height: int):
-        block = {"hash": f"h{height}", "number": height, "timestamp": 1000 + height}
-        tx = {"hash": f"t{height}", "inputs": [], "outputs": []}
-        return BlockWithTxs(block=block, transactions=[tx])
-
-
-def test_stream_writes_to_sqlite(monkeypatch, tmp_path):
+def test_stream_writes_to_sqlite(monkeypatch, tmp_path, stub_service):
     db_path = tmp_path / "local.db"
-    s = StubService()
     adapter = LiquidStreamerAdapter(
-        service=s, output=f"sqlite://{db_path.as_posix()}", batch_size=1
+        service=stub_service, output=f"sqlite://{db_path.as_posix()}", batch_size=1
     )
 
     def raise_kbi(seconds):
