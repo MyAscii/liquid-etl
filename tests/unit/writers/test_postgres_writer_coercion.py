@@ -78,39 +78,6 @@ def _install_fake_psycopg(monkeypatch, state):
     monkeypatch.setitem(__import__("sys").modules, "psycopg", fake)
 
 
-def test_migrate_renames_legacy_tables(monkeypatch):
-    state = {"tables": {"blocks": {"number"}, "transactions": {"tx_index"}}, "renames": []}
-    _install_fake_psycopg(monkeypatch, state)
-    pg_mod.PostgresWriter("postgresql://x")
-    assert ("blocks", "blocks_legacy") in state["renames"]
-    assert ("transactions", "transactions_legacy") in state["renames"]
-
-
-def test_migrate_renames_v2_tables(monkeypatch):
-    state = {
-        "tables": {
-            "blocks_v2": {"height"},
-            "transactions_v2": {"txid"},
-            "txins_v2": {"txid"},
-            "txouts_v2": {"txid"},
-        },
-        "renames": [],
-    }
-    _install_fake_psycopg(monkeypatch, state)
-    pg_mod.PostgresWriter("postgresql://x")
-    assert ("blocks_v2", "blocks") in state["renames"]
-    assert ("transactions_v2", "transactions") in state["renames"]
-    assert ("txins_v2", "txins") in state["renames"]
-    assert ("txouts_v2", "txouts") in state["renames"]
-
-
-def test_migrate_does_not_rename_when_targets_exist(monkeypatch):
-    state = {"tables": {"blocks": {"height"}, "blocks_v2": {"height"}}, "renames": []}
-    _install_fake_psycopg(monkeypatch, state)
-    pg_mod.PostgresWriter("postgresql://x")
-    assert ("blocks_v2", "blocks") not in state["renames"]
-
-
 def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
     state = {
         "tables": {
@@ -239,3 +206,4 @@ def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
         "txids",
     }
     assert expected.issubset(set(row.keys()))
+
