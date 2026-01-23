@@ -44,6 +44,7 @@ packages = [
   "liquidetl",
   "liquidetl.cli",
   "liquidetl.cli.commands",
+  "liquidetl.service",
   "liquidetl.jobs",
   "liquidetl.streaming",
   "liquidetl.utils",

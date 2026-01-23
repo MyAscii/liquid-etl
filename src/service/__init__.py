@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
-from .rpc import LiquidRpc
-from .utils.script_parsing import disassemble_script, extract_op_return_data_hex
+from ..rpc import LiquidRpc
+from .normalize_block import normalize_block
+from .normalize_tx import normalize_address_info, normalize_tx
+from .range import get_block_range_for_date as _get_block_range_for_date
 
 
 @dataclass
@@ -51,93 +51,28 @@ class LiquidService:
     def get_block_range_for_date(
         self, date_str: str, start_hour: int = 0, end_hour: int = 24
     ) -> Tuple[int, int]:
-        """Approximate [start, end] height range that covers the UTC date window.
-
-        Uses binary search over heights to find first block with time >= start,
-        and last block with time < end. Block timestamps are not strictly
-        monotonic, so slight drift outside the window can occur.
-        """
-        dt_start = datetime.strptime(date_str, "%Y-%m-%d").replace(
-            hour=start_hour, tzinfo=timezone.utc
-        )
-        dt_end = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=end_hour, tzinfo=timezone.utc)
-        start_ts = int(dt_start.timestamp())
-        end_ts = int(dt_end.timestamp())
-
         head = self.get_head_height()
-        # Find first block with ts >= start_ts
-        lo, hi = 0, head
-        first = 0
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            bm = self.get_block_by_number(mid).block
-            ts = bm["timestamp"]
-            if ts < start_ts:
-                lo = mid + 1
-            else:
-                first = mid
-                hi = mid - 1
-        # Find last block with ts < end_ts
-        lo, hi = first, head
-        last = head
-        while lo <= hi:
-            mid = (lo + hi) // 2
-            bm = self.get_block_by_number(mid).block
-            ts = bm["timestamp"]
-            if ts >= end_ts:
-                hi = mid - 1
-            else:
-                last = mid
-                lo = mid + 1
-        return first, last
+        return _get_block_range_for_date(
+            get_block_timestamp=lambda h: self.get_block_by_number(h).block["timestamp"],
+            head_height=head,
+            date_str=date_str,
+            start_hour=start_hour,
+            end_hour=end_hour,
+        )
 
     # ---- Normalization helpers ----
     def _normalize_block(self, b: Dict[str, Any]) -> Dict[str, Any]:
-        # Elements block fields closely mirror Bitcoin
-        txids = []
-        for t in b.get("tx", []) or []:
-            if isinstance(t, str):
-                txids.append(t)
-            elif isinstance(t, dict) and t.get("txid"):
-                txids.append(t.get("txid"))
-        return {
-            "hash": b.get("hash"),
-            "confirmations": b.get("confirmations"),
-            "size": b.get("size"),
-            "stripped_size": b.get("strippedsize"),
-            "weight": b.get("weight"),
-            "number": b.get("height"),
-            "version": b.get("version"),
-            "version_hex": b.get("versionHex"),
-            "merkle_root": b.get("merkleroot"),
-            "timestamp": b.get("time"),
-            "median_time": b.get("mediantime"),
-            "nonce": b.get("nonce"),
-            "bits": b.get("bits"),
-            "difficulty": b.get("difficulty"),
-            "chainwork": b.get("chainwork"),
-            "previous_block_hash": b.get("previousblockhash"),
-            "next_block_hash": b.get("nextblockhash"),
-            "transaction_count": b.get("nTx") if b.get("nTx") is not None else len(b.get("tx", [])),
-            "signblock_challenge": b.get("signblock_challenge"),
-            "signblock_witness_asm": b.get("signblock_witness_asm"),
-            "signblock_witness_hex": b.get("signblock_witness_hex"),
-            "dynafed_current_params": b.get("current_federation") or b.get("current_params"),
-            "dynafed_proposed_params": b.get("proposed_federation") or b.get("proposed_params"),
-            "signblock_witness": b.get("signblock_witness"),
-            "txids": txids,
-        }
+        return normalize_block(b)
 
     def _normalize_address_info(
         self, spk: Dict[str, Any]
     ) -> Tuple[Optional[List[str]], Optional[int]]:
-        addrs = spk.get("addresses") or (spk.get("address") and [spk.get("address")])
-        req_sigs = spk.get("reqSigs")
-        return addrs, req_sigs
+        return normalize_address_info(spk)
 
     def _normalize_tx(
         self, t: Dict[str, Any], block_item: Dict[str, Any], tx_index: Optional[int] = None
     ) -> Dict[str, Any]:
+        return normalize_tx(self.rpc, t, block_item, tx_index)
         is_coinbase = any("coinbase" in vin for vin in t.get("vin", []))
         inputs = []
         input_value_total: Optional[Decimal] = None
