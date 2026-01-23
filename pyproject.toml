@@ -47,6 +47,7 @@ packages = [
   "liquidetl.jobs",
   "liquidetl.streaming",
   "liquidetl.utils",
+  "liquidetl.utils.normalization",
 ]
 package-dir = { "liquidetl" = "src" }
 
