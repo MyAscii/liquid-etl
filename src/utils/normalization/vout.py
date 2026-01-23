@@ -34,7 +34,9 @@ def normalize_vout(vout: Dict[str, Any], *, network: str, txid: Optional[str]) -
         "is_pegout": is_pegout,
         "pegout_chain_genesis_hash": pegout.get("genesis_hash") if pegout else None,
         "pegout_btc_scriptpubkey_hex": pegout.get("scriptpubkey") if pegout else None,
-        "pegout_value_sat": to_satoshi(pegout.get("value")) if pegout and pegout.get("value") is not None else None,
+        "pegout_value_sat": (
+            to_satoshi(pegout.get("value")) if pegout and pegout.get("value") is not None else None
+        ),
         "pegout_asset_id": pegout.get("asset") if pegout else None,
         "pegout_extra_data_hex": pegout.get("extra_data") if pegout else None,
         "nonce": vout.get("nonce"),
@@ -54,4 +56,3 @@ def _is_pegout(vout: Dict[str, Any]) -> bool:
     if isinstance(spk, dict) and (spk.get("pegout") or spk.get("type") == "pegout"):
         return True
     return False
-

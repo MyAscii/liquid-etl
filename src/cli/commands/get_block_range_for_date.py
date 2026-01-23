@@ -12,4 +12,3 @@ def get_block_range_for_date(args: argparse.Namespace) -> int:
     start, end = service.get_block_range_for_date(args.date, args.start_hour, args.end_hour)
     print(f"{start} {end}")
     return 0
-

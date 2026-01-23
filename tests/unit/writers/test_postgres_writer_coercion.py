@@ -206,4 +206,3 @@ def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
         "txids",
     }
     assert expected.issubset(set(row.keys()))
-

@@ -20,4 +20,3 @@ def export_all(args: argparse.Namespace) -> int:
         enrich=args.enrich,
     )
     return 0
-

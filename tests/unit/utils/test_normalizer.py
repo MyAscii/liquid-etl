@@ -164,7 +164,7 @@ def test_monkey_normalizer_random_inputs_do_not_crash():
         vout_count = rnd.randint(0, 6)
 
         vins = []
-        for i in range(vin_count):
+        for _i in range(vin_count):
             scriptsig_hex = rnd.choice([None, "00", "51"])
             scriptsig = {}
             if scriptsig_hex is not None:

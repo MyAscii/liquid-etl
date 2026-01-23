@@ -47,7 +47,9 @@ def _resume_start_from_postgres(dsn: str) -> Optional[int]:
         tmp_writer.close()
         if max_height is not None:
             start_block = max_height + 1
-            print(f"Resuming from block {start_block} (DB max height: {max_height})", file=sys.stderr)
+            print(
+                f"Resuming from block {start_block} (DB max height: {max_height})", file=sys.stderr
+            )
             return start_block
         print("Database empty, starting from block 0", file=sys.stderr)
         return 0

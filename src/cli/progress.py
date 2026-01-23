@@ -18,4 +18,3 @@ def render_bar(done: int, total: int, width: int = 30) -> str:
     if filled >= width:
         return "=" * width
     return ("=" * filled) + ">" + ("." * (width - filled - 1))
-

@@ -3,10 +3,10 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
+from ..amounts import to_satoshi
 from .coercion import coerce_block_row, coerce_tx_rows
 from .migrations import migrate_tables
 from .schema import ensure_schema
-from ..amounts import to_satoshi
 
 
 class PostgresWriter:

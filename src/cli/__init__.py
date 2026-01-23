@@ -19,4 +19,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 
 __all__ = ["build_parser", "main"]
-

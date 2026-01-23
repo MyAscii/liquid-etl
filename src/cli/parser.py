@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 
-from .common_args import add_common_provider
 from .commands.audit_rpc_schema import audit_rpc_schema
 from .commands.enrich_transactions import enrich_transactions
 from .commands.export_all import export_all
@@ -14,6 +13,7 @@ from .commands.load_ndjson_to_postgres import load_ndjson_to_postgres
 from .commands.load_ndjson_to_sqlite import load_ndjson_to_sqlite
 from .commands.repair_postgres import repair_postgres
 from .commands.stream import stream
+from .common_args import add_common_provider
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -102,9 +102,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_load.add_argument("--transactions-input", help="Path to transactions NDJSON")
     p_load.set_defaults(func=load_ndjson_to_sqlite)
 
-    p_load_pg = sub.add_parser(
-        "load_ndjson_to_postgres", help="Load NDJSON exports into Postgres"
-    )
+    p_load_pg = sub.add_parser("load_ndjson_to_postgres", help="Load NDJSON exports into Postgres")
     p_load_pg.add_argument(
         "--dsn",
         required=True,

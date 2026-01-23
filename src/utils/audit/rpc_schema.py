@@ -28,4 +28,3 @@ class RpcSchemaAudit:
             "issuance_key_hits": dict(self.issuance_key_hits),
             "prevout_key_hits": dict(self.prevout_key_hits),
         }
-

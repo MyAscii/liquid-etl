@@ -24,4 +24,3 @@ def _iter_ndjson_items(path: str):
             if not line.strip():
                 continue
             yield json.loads(line)
-

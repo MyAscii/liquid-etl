@@ -1,8 +1,7 @@
 import builtins
 
-import pytest
-
 import liquidetl.streaming.streamer_adapter as adapter_mod
+import pytest
 from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
 
 
@@ -34,7 +33,9 @@ def test_enrich_calls_inline_enrichment(monkeypatch, stub_service):
 
     monkeypatch.setattr(__import__("time"), "sleep", raise_kbi)
 
-    adapter = LiquidStreamerAdapter(service=stub_service, output="console", batch_size=1, enrich=True)
+    adapter = LiquidStreamerAdapter(
+        service=stub_service, output="console", batch_size=1, enrich=True
+    )
     adapter.stream(start_block=0, lag=0, poll_interval=0.01)
 
     assert called["count"] >= 1
@@ -71,4 +72,3 @@ def test_db_writer_is_closed_on_shutdown(monkeypatch, stub_service, tmp_path):
 
     assert state["writes"] >= 2
     assert state["closed"] is True
-

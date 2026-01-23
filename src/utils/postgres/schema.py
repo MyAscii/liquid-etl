@@ -10,8 +10,7 @@ def ensure_schema(cur: Any) -> None:
 
 
 def _create_tables(cur: Any) -> None:
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS blocks (
             hash TEXT PRIMARY KEY,
             height BIGINT,
@@ -28,10 +27,8 @@ def _create_tables(cur: Any) -> None:
             signblock_solution_hex TEXT,
             txids JSONB
         )
-        """
-    )
-    cur.execute(
-        """
+        """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
             txid TEXT PRIMARY KEY,
             wtxid TEXT,
@@ -58,10 +55,8 @@ def _create_tables(cur: Any) -> None:
             has_pegin BOOLEAN,
             has_issuance BOOLEAN
         )
-        """
-    )
-    cur.execute(
-        """
+        """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS txins (
             txid TEXT NOT NULL,
             vin INTEGER NOT NULL,
@@ -84,10 +79,8 @@ def _create_tables(cur: Any) -> None:
             prevout_address TEXT,
             PRIMARY KEY (txid, vin)
         )
-        """
-    )
-    cur.execute(
-        """
+        """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS txouts (
             txid TEXT NOT NULL,
             vout INTEGER NOT NULL,
@@ -105,13 +98,16 @@ def _create_tables(cur: Any) -> None:
             surjection_proof TEXT,
             PRIMARY KEY (txid, vout)
         )
-        """
-    )
+        """)
 
 
 def _create_indexes(cur: Any) -> None:
-    cur.execute("CREATE INDEX IF NOT EXISTS transactions_block_height_idx ON transactions (block_height)")
-    cur.execute("CREATE INDEX IF NOT EXISTS txins_prev_outpoint_idx ON txins (prev_txid, prev_vout)")
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS transactions_block_height_idx ON transactions (block_height)"
+    )
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS txins_prev_outpoint_idx ON txins (prev_txid, prev_vout)"
+    )
     cur.execute("CREATE INDEX IF NOT EXISTS txouts_asset_id_idx ON txouts (asset_id)")
 
 
@@ -159,4 +155,3 @@ def drop_obsolete_columns(cur: Any) -> None:
     cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS raw_block_json")
     cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS raw_tx_hex")
     cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS raw_tx_json")
-

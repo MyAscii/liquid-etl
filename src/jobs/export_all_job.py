@@ -48,7 +48,7 @@ def export_all(
         _mkdir(base)
         ranges = list(_batch_ranges(start_block, end_block, batch_size))
 
-    for i, (s, e) in enumerate(ranges):
+    for s, e in ranges:
         batch_dir = base / f"block_start={s}-block_end={e}"
         _mkdir(batch_dir)
         blocks_output = str(batch_dir / "blocks.json")

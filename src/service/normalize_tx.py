@@ -59,7 +59,11 @@ def normalize_tx(
 
         prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
         if prevout:
-            spk = prevout.get("scriptPubKey", {}) if isinstance(prevout.get("scriptPubKey"), dict) else {}
+            spk = (
+                prevout.get("scriptPubKey", {})
+                if isinstance(prevout.get("scriptPubKey"), dict)
+                else {}
+            )
             addrs, req_sigs = normalize_address_info(spk)
             item["addresses"] = addrs
             item["required_signatures"] = req_sigs
@@ -86,7 +90,11 @@ def normalize_tx(
             or (isinstance(spk, dict) and (spk.get("pegout") or spk.get("type") == "pegout"))
         )
         is_fee = bool(vout.get("is_fee") or (isinstance(spk, dict) and spk.get("type") == "fee"))
-        otype = "pegout" if is_pegout else ("fee" if is_fee else ("confidential" if is_confidential else None))
+        otype = (
+            "pegout"
+            if is_pegout
+            else ("fee" if is_fee else ("confidential" if is_confidential else None))
+        )
 
         if is_confidential:
             confidential_present = True
@@ -171,7 +179,9 @@ def normalize_address_info(spk: Dict[str, Any]) -> Tuple[Optional[List[str]], Op
     return addrs, req_sigs
 
 
-def _scriptsig_fields(rpc: Any, vin: Dict[str, Any]) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+def _scriptsig_fields(
+    rpc: Any, vin: Dict[str, Any]
+) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     scriptsig = vin.get("scriptSig") if isinstance(vin.get("scriptSig"), dict) else {}
     is_coinbase_input = "coinbase" in vin
     scriptsig_hex = scriptsig.get("hex")
@@ -189,4 +199,3 @@ def _scriptsig_fields(rpc: Any, vin: Dict[str, Any]) -> Tuple[Optional[str], Opt
             scriptsig_asm = disassemble_script(scriptsig_hex)
 
     return scriptsig_hex, scriptsig_asm, coinbase_hex
-

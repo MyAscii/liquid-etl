@@ -41,7 +41,9 @@ def repair_postgres(args: argparse.Namespace) -> int:
                 rpc = _require_rpc(args)
             except RuntimeError as e:
                 print(str(e), file=sys.stderr)
-                print("Tip: start your node, or run with --dry-run / --no-fill-gaps", file=sys.stderr)
+                print(
+                    "Tip: start your node, or run with --dry-run / --no-fill-gaps", file=sys.stderr
+                )
                 return 1
             _ingest_gaps(
                 writer=writer,
@@ -94,7 +96,10 @@ def _dedupe_duplicate_heights(writer: Any, start_h: int, end_h: int, dry_run: bo
         if not delete_hashes:
             continue
         if dry_run:
-            print(f"[dry-run] height={h} keep={keep_hash} delete={len(delete_hashes)} blocks", file=sys.stderr)
+            print(
+                f"[dry-run] height={h} keep={keep_hash} delete={len(delete_hashes)} blocks",
+                file=sys.stderr,
+            )
             continue
         _delete_blocks(writer, h, keep_hash, delete_hashes)
 
@@ -138,14 +143,19 @@ def _pick_keep_and_deletes(writer: Any, height: int) -> Tuple[str, List[str]]:
 def _delete_blocks(writer: Any, height: int, keep_hash: str, delete_hashes: Sequence[str]) -> None:
     with writer.conn.transaction():
         with writer.conn.cursor() as cur:
-            cur.execute("SELECT txid FROM transactions WHERE block_hash = ANY(%s)", (list(delete_hashes),))
+            cur.execute(
+                "SELECT txid FROM transactions WHERE block_hash = ANY(%s)", (list(delete_hashes),)
+            )
             txids = [r[0] for r in (cur.fetchall() or [])]
             if txids:
                 cur.execute("DELETE FROM txins WHERE txid = ANY(%s)", (txids,))
                 cur.execute("DELETE FROM txouts WHERE txid = ANY(%s)", (txids,))
                 cur.execute("DELETE FROM transactions WHERE txid = ANY(%s)", (txids,))
             cur.execute("DELETE FROM blocks WHERE hash = ANY(%s)", (list(delete_hashes),))
-    print(f"Deduped height={height}: kept={keep_hash}, removed_blocks={len(delete_hashes)}", file=sys.stderr)
+    print(
+        f"Deduped height={height}: kept={keep_hash}, removed_blocks={len(delete_hashes)}",
+        file=sys.stderr,
+    )
 
 
 def _compute_gaps(
@@ -310,6 +320,8 @@ def _render_fill_progress(
     rate = done / elapsed
     eta = (total - done) / rate if rate > 0 else float("inf")
     bar = render_bar(done, total, width=30)
-    sys.stderr.write(f"\r[{bar}] filled {done}/{total} ({(done / total) * 100:5.1f}%) {rate:6.1f} blk/s eta={fmt_eta(eta)}")
+    sys.stderr.write(
+        f"\r[{bar}] filled {done}/{total} ({(done / total) * 100:5.1f}%) {rate:6.1f} blk/s eta={fmt_eta(eta)}"
+    )
     sys.stderr.flush()
     return now

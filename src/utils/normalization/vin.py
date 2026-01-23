@@ -7,7 +7,9 @@ from ..script_parsing import disassemble_script
 from .address import pick_address
 
 
-def normalize_vin(vin: Dict[str, Any], *, network: str, txid: Optional[str], vin_index: int) -> Dict[str, Any]:
+def normalize_vin(
+    vin: Dict[str, Any], *, network: str, txid: Optional[str], vin_index: int
+) -> Dict[str, Any]:
     scriptsig_hex, scriptsig_asm = _scriptsig_fields(vin)
     witness = vin.get("txinwitness")
     if witness is None:
@@ -30,7 +32,9 @@ def normalize_vin(vin: Dict[str, Any], *, network: str, txid: Optional[str], vin
         "txinwitness": witness,
         "pegin_witness": vin.get("pegin_witness"),
         "is_pegin": bool(vin.get("is_pegin")),
-        "pegin_value_sat": to_satoshi(vin.get("pegin_value")) if vin.get("pegin_value") is not None else None,
+        "pegin_value_sat": (
+            to_satoshi(vin.get("pegin_value")) if vin.get("pegin_value") is not None else None
+        ),
         "pegin_asset_id": vin.get("pegin_asset"),
         "pegin_genesis_hash": vin.get("pegin_genesis_hash"),
         "pegin_claim_script_hex": vin.get("pegin_claim_script"),
@@ -40,14 +44,32 @@ def normalize_vin(vin: Dict[str, Any], *, network: str, txid: Optional[str], vin
         "has_issuance": bool("issuance" in vin or "assetissuance" in vin),
         "issuance_asset_blinding_nonce": issuance.get("assetBlindingNonce") if issuance else None,
         "issuance_asset_entropy": issuance.get("assetEntropy") if issuance else None,
-        "issuance_amount": to_satoshi(issuance.get("assetamount")) if issuance and issuance.get("assetamount") is not None else None,
+        "issuance_amount": (
+            to_satoshi(issuance.get("assetamount"))
+            if issuance and issuance.get("assetamount") is not None
+            else None
+        ),
         "issuance_amount_commitment": issuance.get("assetamountcommitment") if issuance else None,
-        "issuance_inflation_keys": to_satoshi(issuance.get("tokenamount")) if issuance and issuance.get("tokenamount") is not None else None,
-        "issuance_inflation_keys_commitment": issuance.get("tokenamountcommitment") if issuance else None,
+        "issuance_inflation_keys": (
+            to_satoshi(issuance.get("tokenamount"))
+            if issuance and issuance.get("tokenamount") is not None
+            else None
+        ),
+        "issuance_inflation_keys_commitment": (
+            issuance.get("tokenamountcommitment") if issuance else None
+        ),
         "prevout_asset_id": prevout.get("asset") if isinstance(prevout, dict) else None,
-        "prevout_value_sat": to_satoshi(prevout.get("value")) if isinstance(prevout, dict) and prevout.get("value") is not None else None,
-        "prevout_value_commitment": prevout.get("valuecommitment") if isinstance(prevout, dict) else None,
-        "prevout_asset_commitment": prevout.get("assetcommitment") if isinstance(prevout, dict) else None,
+        "prevout_value_sat": (
+            to_satoshi(prevout.get("value"))
+            if isinstance(prevout, dict) and prevout.get("value") is not None
+            else None
+        ),
+        "prevout_value_commitment": (
+            prevout.get("valuecommitment") if isinstance(prevout, dict) else None
+        ),
+        "prevout_asset_commitment": (
+            prevout.get("assetcommitment") if isinstance(prevout, dict) else None
+        ),
         "prevout_scriptpubkey_hex": spk.get("hex") if isinstance(spk, dict) else None,
         "prevout_script_type": spk.get("type") if isinstance(spk, dict) else None,
         "prevout_address": pick_address(spk),
@@ -76,4 +98,3 @@ def _prevout_spk(prevout: Any) -> Dict[str, Any]:
 def _issuance_dict(vin: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     issuance = vin.get("issuance") or vin.get("assetissuance")
     return issuance if isinstance(issuance, dict) else None
-

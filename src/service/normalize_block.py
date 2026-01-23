@@ -37,4 +37,3 @@ def normalize_block(b: Dict[str, Any]) -> Dict[str, Any]:
         "signblock_witness": b.get("signblock_witness"),
         "txids": txids,
     }
-

@@ -46,7 +46,12 @@ def suggest_prunable_postgres_columns(audit: RpcSchemaAudit) -> Dict[str, List[s
 def to_postgres_drop_column_sql(prunable: Dict[str, List[str]]) -> List[str]:
     sql: List[str] = []
 
-    blocks_map = {"bits": "bits", "nonce": "nonce", "difficulty": "difficulty", "chainwork": "chainwork"}
+    blocks_map = {
+        "bits": "bits",
+        "nonce": "nonce",
+        "difficulty": "difficulty",
+        "chainwork": "chainwork",
+    }
     txins_map = {
         "pegin_value": "pegin_value_sat",
         "pegin_asset": "pegin_asset_id",
@@ -93,4 +98,3 @@ def to_postgres_drop_column_sql(prunable: Dict[str, List[str]]) -> List[str]:
             sql.append(f"ALTER TABLE txouts DROP COLUMN IF EXISTS {col}")
 
     return sql
-

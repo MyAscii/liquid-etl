@@ -20,7 +20,7 @@ def test_filter_ndjson(tmp_path):
         predicate='lambda x: x["block_timestamp"].startswith("2019-03-01")',
     )
     with open(out, "r", encoding="utf-8") as f:
-        lines = [l for l in f.read().splitlines() if l]
+        lines = [line for line in f.read().splitlines() if line]
     assert len(lines) == 1
 
 

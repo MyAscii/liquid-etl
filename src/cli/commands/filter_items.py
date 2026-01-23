@@ -13,4 +13,3 @@ def filter_items(args: argparse.Namespace) -> int:
         input_format=args.format,
     )
     return 0
-

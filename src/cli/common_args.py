@@ -14,4 +14,3 @@ def add_common_provider(parser: argparse.ArgumentParser) -> None:
         "--datadir",
         help="Elements/Liquid datadir (optional). Used to read .cookie or elements.conf when provider-uri has no creds.",
     )
-

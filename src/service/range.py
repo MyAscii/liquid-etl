@@ -36,7 +36,9 @@ def _binary_search_first_ge(
     return first
 
 
-def _binary_search_last_lt(get_ts: Callable[[int], int], lo: int, hi: int, ts_threshold: int) -> int:
+def _binary_search_last_lt(
+    get_ts: Callable[[int], int], lo: int, hi: int, ts_threshold: int
+) -> int:
     last = hi
     while lo <= hi:
         mid = (lo + hi) // 2
@@ -47,4 +49,3 @@ def _binary_search_last_lt(get_ts: Callable[[int], int], lo: int, hi: int, ts_th
             last = mid
             lo = mid + 1
     return last
-

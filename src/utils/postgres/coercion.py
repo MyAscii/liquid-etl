@@ -51,8 +51,12 @@ def coerce_tx_rows(
     has_issuance = any(isinstance(i, dict) and i.get("input_type") == "issuance" for i in inputs)
 
     fee_by_asset = _aggregate_fee_by_asset(tx.get("node_fee"))
-    explicit_in_by_asset = _aggregate_explicit_by_asset(inputs, asset_key="asset", value_key="value")
-    explicit_out_by_asset = _aggregate_explicit_by_asset(outputs, asset_key="asset", value_key="value")
+    explicit_in_by_asset = _aggregate_explicit_by_asset(
+        inputs, asset_key="asset", value_key="value"
+    )
+    explicit_out_by_asset = _aggregate_explicit_by_asset(
+        outputs, asset_key="asset", value_key="value"
+    )
 
     tx_row: Dict[str, Any] = {
         "txid": tx.get("txid"),
@@ -86,9 +90,15 @@ def coerce_tx_rows(
         if not isinstance(vin, dict):
             continue
         issuance = vin.get("issuance") if isinstance(vin.get("issuance"), dict) else {}
-        issuance_amount_sat = to_satoshi(issuance.get("assetamount")) if issuance.get("assetamount") is not None else None
+        issuance_amount_sat = (
+            to_satoshi(issuance.get("assetamount"))
+            if issuance.get("assetamount") is not None
+            else None
+        )
         issuance_inflation_keys_sat = (
-            to_satoshi(issuance.get("tokenamount")) if issuance.get("tokenamount") is not None else None
+            to_satoshi(issuance.get("tokenamount"))
+            if issuance.get("tokenamount") is not None
+            else None
         )
         addr = None
         addrs = vin.get("addresses")
@@ -165,7 +175,9 @@ def _aggregate_fee_by_asset(node_fee: Any) -> Optional[Dict[str, int]]:
     return fee_by_asset_map or None
 
 
-def _aggregate_explicit_by_asset(items: List[Any], *, asset_key: str, value_key: str) -> Optional[Dict[str, int]]:
+def _aggregate_explicit_by_asset(
+    items: List[Any], *, asset_key: str, value_key: str
+) -> Optional[Dict[str, int]]:
     out: Dict[str, int] = {}
     for it in items:
         if not isinstance(it, dict):
@@ -180,4 +192,3 @@ def _aggregate_explicit_by_asset(items: List[Any], *, asset_key: str, value_key:
         k = str(asset)
         out[k] = out.get(k, 0) + int(sat)
     return out or None
-

@@ -19,4 +19,3 @@ def export_blocks_and_transactions(args: argparse.Namespace) -> int:
     )
     job.run()
     return 0
-

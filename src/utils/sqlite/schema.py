@@ -6,8 +6,7 @@ from typing import Dict, Set
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     cur = conn.cursor()
-    cur.execute(
-        """
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS blocks (
             hash TEXT PRIMARY KEY,
             number INTEGER,
@@ -29,10 +28,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             signblock_witness_asm TEXT,
             signblock_witness_hex TEXT
         )
-        """
-    )
-    cur.execute(
-        """
+        """)
+    cur.execute("""
         CREATE TABLE IF NOT EXISTS transactions (
             hash TEXT,
             txid TEXT,
@@ -62,8 +59,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             outputs TEXT,
             PRIMARY KEY (hash, "index")
         )
-        """
-    )
+        """)
     cur.close()
 
     ensure_columns(
@@ -111,4 +107,3 @@ def ensure_columns(conn: sqlite3.Connection, table: str, columns: Dict[str, str]
             continue
         cur.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ctype}")
     cur.close()
-

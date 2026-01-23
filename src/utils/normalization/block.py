@@ -11,8 +11,10 @@ def normalize_block(block: Dict[str, Any], network: str) -> Dict[str, Any]:
             txids.append(t.get("txid"))
 
     extdata_type = None
-    if block.get("signblock_challenge") or block.get("signblock_witness_hex") or block.get(
-        "signblock_witness_asm"
+    if (
+        block.get("signblock_challenge")
+        or block.get("signblock_witness_hex")
+        or block.get("signblock_witness_asm")
     ):
         extdata_type = "proof"
 
@@ -42,4 +44,3 @@ def normalize_block(block: Dict[str, Any], network: str) -> Dict[str, Any]:
         "signblock_witness": block.get("signblock_witness"),
         "txids": txids,
     }
-

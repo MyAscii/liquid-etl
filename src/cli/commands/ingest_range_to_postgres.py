@@ -4,6 +4,7 @@ import argparse
 import sys
 import time
 from typing import Any, Iterable, List, Sequence, Tuple
+
 from ..progress import fmt_eta, render_bar
 
 

@@ -36,10 +36,10 @@ class LiquidStreamerAdapter:
                     "blocks": f"{output}.blocks",
                     "transactions": f"{output}.transactions",
                 }
-            except Exception:
+            except Exception as e:
                 raise RuntimeError(
                     "google-cloud-pubsub not installed; install with pip install -e .[streaming]"
-                )
+                ) from e
         elif output and output.startswith("sqlite://"):
             path = output[len("sqlite://") :]
             self._db = SQLiteWriter(path)

@@ -44,4 +44,3 @@ def _table_has_column(cur: Any, table: str, column: str) -> bool:
 
 def _rename_table(cur: Any, old: str, new: str) -> None:
     cur.execute(f"ALTER TABLE {old} RENAME TO {new}")
-

@@ -16,8 +16,8 @@ def test_export_blocks_job_writes_ndjson(tmp_path):
     job.run()
     # Two blocks lines
     with open(blocks_out, "r", encoding="utf-8") as f:
-        lines = [l for l in f.read().splitlines() if l]
+        lines = [line for line in f.read().splitlines() if line]
         assert len(lines) == 2
     with open(tx_out, "r", encoding="utf-8") as f:
-        lines = [l for l in f.read().splitlines() if l]
+        lines = [line for line in f.read().splitlines() if line]
         assert len(lines) == 2

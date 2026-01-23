@@ -13,4 +13,3 @@ def pick_address(spk: Any) -> Optional[str]:
     if isinstance(addr, str) and addr:
         return addr
     return None
-

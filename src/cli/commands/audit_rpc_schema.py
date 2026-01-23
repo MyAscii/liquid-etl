@@ -29,4 +29,3 @@ def audit_rpc_schema(args: argparse.Namespace) -> int:
     out["prunable_postgres_drop_sql"] = to_postgres_drop_column_sql(prunable)
     print(json.dumps(out, indent=2, sort_keys=True))
     return 0
-

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..rpc import LiquidRpc
+from ..utils.script_parsing import disassemble_script, extract_op_return_data_hex
 from .normalize_block import normalize_block
 from .normalize_tx import normalize_address_info, normalize_tx
 from .range import get_block_range_for_date as _get_block_range_for_date

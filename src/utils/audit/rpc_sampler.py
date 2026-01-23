@@ -141,4 +141,3 @@ def _hit(counter: Dict[str, int], key: str, value: Any) -> None:
     if value is None:
         return
     counter[key] = counter.get(key, 0) + 1
-

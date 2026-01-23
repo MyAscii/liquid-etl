@@ -50,4 +50,3 @@ def test_cli_load_ndjson_into_sqlite(tmp_path):
 
     assert blocks_count == 1
     assert tx_count == 1
-
