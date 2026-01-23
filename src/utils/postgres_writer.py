@@ -7,9 +7,8 @@ from .amounts import to_satoshi
 
 
 class PostgresWriter:
-    def __init__(self, dsn: str, network: str = "liquidv1"):
+    def __init__(self, dsn: str):
         self.dsn = dsn
-        self.network = network
         try:
             import psycopg
         except Exception as e:
@@ -26,7 +25,6 @@ class PostgresWriter:
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS blocks (
-                    network TEXT NOT NULL,
                     hash TEXT PRIMARY KEY,
                     height BIGINT,
                     version BIGINT,
@@ -35,20 +33,11 @@ class PostgresWriter:
                     merkle_root TEXT,
                     time BIGINT,
                     median_time BIGINT,
-                    nonce BIGINT,
-                    bits TEXT,
-                    difficulty DOUBLE PRECISION,
-                    chainwork TEXT,
                     tx_count BIGINT,
                     size BIGINT,
                     stripped_size BIGINT,
                     weight BIGINT,
-                    extdata_type TEXT,
-                    signblock_challenge_hex TEXT,
                     signblock_solution_hex TEXT,
-                    dynafed_current_params JSONB,
-                    dynafed_proposed_params JSONB,
-                    signblock_witness JSONB,
                     txids JSONB
                 )
                 """
@@ -56,7 +45,6 @@ class PostgresWriter:
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS transactions (
-                    network TEXT NOT NULL,
                     txid TEXT PRIMARY KEY,
                     wtxid TEXT,
                     hash TEXT,
@@ -80,7 +68,6 @@ class PostgresWriter:
                     explicit_out_by_asset JSONB,
                     has_any_confidential BOOLEAN,
                     has_pegin BOOLEAN,
-                    has_pegout BOOLEAN,
                     has_issuance BOOLEAN
                 )
                 """
@@ -88,7 +75,6 @@ class PostgresWriter:
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS txins (
-                    network TEXT NOT NULL,
                     txid TEXT NOT NULL,
                     vin INTEGER NOT NULL,
                     prev_txid TEXT,
@@ -100,24 +86,11 @@ class PostgresWriter:
                     txinwitness JSONB,
                     pegin_witness JSONB,
                     is_pegin BOOLEAN,
-                    pegin_value_sat BIGINT,
-                    pegin_asset_id TEXT,
-                    pegin_genesis_hash TEXT,
-                    pegin_claim_script_hex TEXT,
-                    pegin_mainchain_tx_hex TEXT,
-                    pegin_merkle_proof_hex TEXT,
-                    pegin_referenced_block_hash TEXT,
                     has_issuance BOOLEAN,
                     issuance_asset_blinding_nonce TEXT,
                     issuance_asset_entropy TEXT,
                     issuance_amount BIGINT,
-                    issuance_amount_commitment TEXT,
                     issuance_inflation_keys BIGINT,
-                    issuance_inflation_keys_commitment TEXT,
-                    prevout_asset_id TEXT,
-                    prevout_value_sat BIGINT,
-                    prevout_value_commitment TEXT,
-                    prevout_asset_commitment TEXT,
                     prevout_scriptpubkey_hex TEXT,
                     prevout_script_type TEXT,
                     prevout_address TEXT,
@@ -128,7 +101,6 @@ class PostgresWriter:
             cur.execute(
                 """
                 CREATE TABLE IF NOT EXISTS txouts (
-                    network TEXT NOT NULL,
                     txid TEXT NOT NULL,
                     vout INTEGER NOT NULL,
                     asset_id TEXT,
@@ -142,19 +114,7 @@ class PostgresWriter:
                     is_op_return BOOLEAN,
                     op_return_data_hex TEXT,
                     is_fee BOOLEAN,
-                    is_pegout BOOLEAN,
-                    pegout_chain_genesis_hash TEXT,
-                    pegout_btc_scriptpubkey_hex TEXT,
-                    pegout_value_sat BIGINT,
-                    pegout_asset_id TEXT,
-                    pegout_extra_data_hex TEXT,
-                    nonce TEXT,
                     surjection_proof TEXT,
-                    rangeproof TEXT,
-                    spent BOOLEAN,
-                    spent_by_txid TEXT,
-                    spent_by_vin INTEGER,
-                    spent_at_height BIGINT,
                     PRIMARY KEY (txid, vout)
                 )
                 """
@@ -162,6 +122,45 @@ class PostgresWriter:
             cur.execute("CREATE INDEX IF NOT EXISTS transactions_block_height_idx ON transactions (block_height)")
             cur.execute("CREATE INDEX IF NOT EXISTS txins_prev_outpoint_idx ON txins (prev_txid, prev_vout)")
             cur.execute("CREATE INDEX IF NOT EXISTS txouts_asset_id_idx ON txouts (asset_id)")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS network")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS nonce")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS bits")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS difficulty")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS chainwork")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS extdata_type")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS signblock_challenge_hex")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS dynafed_current_params")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS dynafed_proposed_params")
+            cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS signblock_witness")
+            cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS network")
+            cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS has_pegout")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS network")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_value_sat")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_asset_id")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_genesis_hash")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_claim_script_hex")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_mainchain_tx_hex")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_merkle_proof_hex")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_referenced_block_hash")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS issuance_amount_commitment")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS issuance_inflation_keys_commitment")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_asset_id")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_value_sat")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_value_commitment")
+            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_asset_commitment")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS network")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS is_pegout")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS pegout_chain_genesis_hash")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS pegout_btc_scriptpubkey_hex")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS pegout_value_sat")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS pegout_asset_id")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS pegout_extra_data_hex")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS nonce")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS rangeproof")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS spent")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS spent_by_txid")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS spent_by_vin")
+            cur.execute("ALTER TABLE txouts DROP COLUMN IF EXISTS spent_at_height")
             cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS raw_block_hex")
             cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS raw_block_json")
             cur.execute("ALTER TABLE transactions DROP COLUMN IF EXISTS raw_tx_hex")
@@ -255,26 +254,6 @@ class PostgresWriter:
     def _coerce_block_row(self, block: Dict[str, Any]) -> Dict[str, Any]:
         raw = block.get("raw_block") if isinstance(block.get("raw_block"), dict) else None
 
-        difficulty = block.get("difficulty")
-        if difficulty is None and isinstance(raw, dict):
-            difficulty = raw.get("difficulty")
-
-        chainwork = block.get("chainwork")
-        if chainwork is None and isinstance(raw, dict):
-            chainwork = raw.get("chainwork")
-
-        dynafed_current_params = block.get("dynafed_current_params")
-        if dynafed_current_params is None and isinstance(raw, dict):
-            dynafed_current_params = raw.get("current_federation") or raw.get("current_params")
-
-        dynafed_proposed_params = block.get("dynafed_proposed_params")
-        if dynafed_proposed_params is None and isinstance(raw, dict):
-            dynafed_proposed_params = raw.get("proposed_federation") or raw.get("proposed_params")
-
-        signblock_witness = block.get("signblock_witness")
-        if signblock_witness is None and isinstance(raw, dict):
-            signblock_witness = raw.get("signblock_witness")
-
         txids = block.get("txids")
         if txids is None and isinstance(raw, dict) and isinstance(raw.get("tx"), list):
             txids = []
@@ -284,12 +263,7 @@ class PostgresWriter:
                 elif isinstance(t, dict) and t.get("txid"):
                     txids.append(t.get("txid"))
 
-        extdata_type = None
-        if block.get("signblock_challenge") or block.get("signblock_witness_hex") or block.get("signblock_witness_asm"):
-            extdata_type = "proof"
-
         return {
-            "network": self.network,
             "hash": block.get("hash") or block.get("item_id"),
             "height": block.get("number") or block.get("height"),
             "version": block.get("version"),
@@ -298,20 +272,11 @@ class PostgresWriter:
             "merkle_root": block.get("merkle_root"),
             "time": block.get("timestamp"),
             "median_time": block.get("median_time"),
-            "nonce": block.get("nonce"),
-            "bits": block.get("bits"),
-            "difficulty": difficulty,
-            "chainwork": chainwork,
             "tx_count": block.get("transaction_count"),
             "size": block.get("size"),
             "stripped_size": block.get("stripped_size"),
             "weight": block.get("weight"),
-            "extdata_type": extdata_type,
-            "signblock_challenge_hex": block.get("signblock_challenge"),
             "signblock_solution_hex": block.get("signblock_witness_hex"),
-            "dynafed_current_params": dynafed_current_params,
-            "dynafed_proposed_params": dynafed_proposed_params,
-            "signblock_witness": signblock_witness,
             "txids": txids,
         }
 
@@ -325,10 +290,49 @@ class PostgresWriter:
         has_any_confidential = any(isinstance(o, dict) and o.get("confidential_value") for o in outputs)
         has_pegin = any(isinstance(i, dict) and i.get("input_type") == "pegin" for i in inputs)
         has_issuance = any(isinstance(i, dict) and i.get("input_type") == "issuance" for i in inputs)
-        has_pegout = any(isinstance(o, dict) and o.get("type") == "pegout" for o in outputs)
+
+        fee_by_asset = None
+        node_fee = tx.get("node_fee")
+        if isinstance(node_fee, dict):
+            fee_by_asset_map: Dict[str, int] = {}
+            for asset, amount in node_fee.items():
+                sat = to_satoshi(amount)
+                if sat is None:
+                    continue
+                fee_by_asset_map[str(asset)] = fee_by_asset_map.get(str(asset), 0) + int(sat)
+            fee_by_asset = fee_by_asset_map or None
+
+        explicit_in_by_asset = None
+        explicit_in_map: Dict[str, int] = {}
+        for vin in inputs:
+            if not isinstance(vin, dict):
+                continue
+            asset = vin.get("asset")
+            value = vin.get("value")
+            if asset is None or value is None:
+                continue
+            sat = to_satoshi(value)
+            if sat is None:
+                continue
+            explicit_in_map[str(asset)] = explicit_in_map.get(str(asset), 0) + int(sat)
+        explicit_in_by_asset = explicit_in_map or None
+
+        explicit_out_by_asset = None
+        explicit_out_map: Dict[str, int] = {}
+        for vout in outputs:
+            if not isinstance(vout, dict):
+                continue
+            asset = vout.get("asset")
+            value = vout.get("value")
+            if asset is None or value is None:
+                continue
+            sat = to_satoshi(value)
+            if sat is None:
+                continue
+            explicit_out_map[str(asset)] = explicit_out_map.get(str(asset), 0) + int(sat)
+        explicit_out_by_asset = explicit_out_map or None
 
         tx_row: Dict[str, Any] = {
-            "network": self.network,
             "txid": tx.get("txid"),
             "wtxid": tx.get("wtxid"),
             "hash": tx.get("hash"),
@@ -347,12 +351,11 @@ class PostgresWriter:
             "discount_weight": tx.get("discount_weight"),
             "vin_count": tx.get("input_count") if tx.get("input_count") is not None else len(inputs),
             "vout_count": tx.get("output_count") if tx.get("output_count") is not None else len(outputs),
-            "fee_by_asset": None,
-            "explicit_in_by_asset": None,
-            "explicit_out_by_asset": None,
+            "fee_by_asset": fee_by_asset,
+            "explicit_in_by_asset": explicit_in_by_asset,
+            "explicit_out_by_asset": explicit_out_by_asset,
             "has_any_confidential": bool(has_any_confidential),
             "has_pegin": bool(has_pegin),
-            "has_pegout": bool(has_pegout),
             "has_issuance": bool(has_issuance),
         }
 
@@ -360,15 +363,26 @@ class PostgresWriter:
         for vin_index, vin in enumerate(inputs):
             if not isinstance(vin, dict):
                 continue
-            prevout_value_sat = to_satoshi(vin.get("value")) if vin.get("value") is not None else None
             addr = None
             addrs = vin.get("addresses")
             if isinstance(addrs, list) and addrs:
                 addr = addrs[0]
 
+            is_pegin = bool(vin.get("input_type") == "pegin" or vin.get("is_pegin"))
+            issuance = vin.get("issuance") if isinstance(vin.get("issuance"), dict) else None
+
+            issuance_asset_blinding_nonce = None
+            issuance_asset_entropy = None
+            issuance_amount_sat = None
+            issuance_inflation_keys_sat = None
+            if issuance:
+                issuance_asset_blinding_nonce = issuance.get("assetBlindingNonce") or issuance.get("assetblindingnonce")
+                issuance_asset_entropy = issuance.get("assetEntropy") or issuance.get("assetentropy")
+                issuance_amount_sat = to_satoshi(issuance.get("assetamount")) if issuance.get("assetamount") is not None else None
+                issuance_inflation_keys_sat = to_satoshi(issuance.get("tokenamount")) if issuance.get("tokenamount") is not None else None
+
             txins.append(
                 {
-                    "network": self.network,
                     "txid": tx.get("txid"),
                     "vin": vin_index,
                     "prev_txid": vin.get("txid"),
@@ -378,26 +392,13 @@ class PostgresWriter:
                     "scriptsig_hex": vin.get("scriptsig_hex") or vin.get("coinbase_hex"),
                     "scriptsig_asm": vin.get("scriptsig_asm"),
                     "txinwitness": vin.get("witness"),
-                    "pegin_witness": None,
-                    "is_pegin": vin.get("input_type") == "pegin",
-                    "pegin_value_sat": None,
-                    "pegin_asset_id": None,
-                    "pegin_genesis_hash": None,
-                    "pegin_claim_script_hex": None,
-                    "pegin_mainchain_tx_hex": None,
-                    "pegin_merkle_proof_hex": None,
-                    "pegin_referenced_block_hash": None,
+                    "pegin_witness": vin.get("pegin_witness"),
+                    "is_pegin": is_pegin,
                     "has_issuance": vin.get("input_type") == "issuance",
-                    "issuance_asset_blinding_nonce": None,
-                    "issuance_asset_entropy": None,
-                    "issuance_amount": None,
-                    "issuance_amount_commitment": None,
-                    "issuance_inflation_keys": None,
-                    "issuance_inflation_keys_commitment": None,
-                    "prevout_asset_id": vin.get("asset"),
-                    "prevout_value_sat": prevout_value_sat,
-                    "prevout_value_commitment": None,
-                    "prevout_asset_commitment": None,
+                    "issuance_asset_blinding_nonce": issuance_asset_blinding_nonce,
+                    "issuance_asset_entropy": issuance_asset_entropy,
+                    "issuance_amount": issuance_amount_sat,
+                    "issuance_inflation_keys": issuance_inflation_keys_sat,
                     "prevout_scriptpubkey_hex": vin.get("scriptpubkey_hex"),
                     "prevout_script_type": vin.get("type"),
                     "prevout_address": addr,
@@ -417,11 +418,10 @@ class PostgresWriter:
 
             txouts.append(
                 {
-                    "network": self.network,
                     "txid": tx.get("txid"),
                     "vout": vout.get("n"),
                     "asset_id": vout.get("asset"),
-                    "asset_commitment": None,
+                    "asset_commitment": vout.get("asset_commitment"),
                     "value_sat": value_sat,
                     "value_commitment": vout.get("confidential_value"),
                     "scriptpubkey_hex": vout.get("scriptpubkey_hex"),
@@ -431,19 +431,7 @@ class PostgresWriter:
                     "is_op_return": bool(vout.get("op_return_data_hex")),
                     "op_return_data_hex": vout.get("op_return_data_hex"),
                     "is_fee": vout.get("type") == "fee",
-                    "is_pegout": vout.get("type") == "pegout",
-                    "pegout_chain_genesis_hash": None,
-                    "pegout_btc_scriptpubkey_hex": None,
-                    "pegout_value_sat": None,
-                    "pegout_asset_id": None,
-                    "pegout_extra_data_hex": None,
-                    "nonce": None,
-                    "surjection_proof": None,
-                    "rangeproof": None,
-                    "spent": None,
-                    "spent_by_txid": None,
-                    "spent_by_vin": None,
-                    "spent_at_height": None,
+                    "surjection_proof": vout.get("surjection_proof"),
                 }
             )
 
@@ -455,9 +443,6 @@ class PostgresWriter:
             payloads.append(
                 {
                     **b,
-                    "dynafed_current_params": json.dumps(b.get("dynafed_current_params"), default=str) if b.get("dynafed_current_params") is not None else None,
-                    "dynafed_proposed_params": json.dumps(b.get("dynafed_proposed_params"), default=str) if b.get("dynafed_proposed_params") is not None else None,
-                    "signblock_witness": json.dumps(b.get("signblock_witness"), default=str) if b.get("signblock_witness") is not None else None,
                     "txids": json.dumps(b.get("txids"), default=str) if b.get("txids") is not None else None,
                 }
             )
@@ -467,22 +452,19 @@ class PostgresWriter:
             cur.executemany(
                 """
                 INSERT INTO blocks (
-                    network, hash, height, version, prev_block_hash, next_block_hash,
-                    merkle_root, time, median_time, nonce, bits, difficulty, chainwork,
+                    hash, height, version, prev_block_hash, next_block_hash,
+                    merkle_root, time, median_time,
                     tx_count, size, stripped_size, weight,
-                    extdata_type, signblock_challenge_hex, signblock_solution_hex,
-                    dynafed_current_params, dynafed_proposed_params, signblock_witness,
+                    signblock_solution_hex,
                     txids
                 ) VALUES (
-                    %(network)s, %(hash)s, %(height)s, %(version)s, %(prev_block_hash)s, %(next_block_hash)s,
-                    %(merkle_root)s, %(time)s, %(median_time)s, %(nonce)s, %(bits)s, %(difficulty)s, %(chainwork)s,
+                    %(hash)s, %(height)s, %(version)s, %(prev_block_hash)s, %(next_block_hash)s,
+                    %(merkle_root)s, %(time)s, %(median_time)s,
                     %(tx_count)s, %(size)s, %(stripped_size)s, %(weight)s,
-                    %(extdata_type)s, %(signblock_challenge_hex)s, %(signblock_solution_hex)s,
-                    %(dynafed_current_params)s::jsonb, %(dynafed_proposed_params)s::jsonb, %(signblock_witness)s::jsonb,
+                    %(signblock_solution_hex)s,
                     %(txids)s::jsonb
                 )
                 ON CONFLICT (hash) DO UPDATE SET
-                    network = EXCLUDED.network,
                     height = EXCLUDED.height,
                     version = EXCLUDED.version,
                     prev_block_hash = EXCLUDED.prev_block_hash,
@@ -490,20 +472,11 @@ class PostgresWriter:
                     merkle_root = EXCLUDED.merkle_root,
                     time = EXCLUDED.time,
                     median_time = EXCLUDED.median_time,
-                    nonce = EXCLUDED.nonce,
-                    bits = EXCLUDED.bits,
-                    difficulty = EXCLUDED.difficulty,
-                    chainwork = EXCLUDED.chainwork,
                     tx_count = EXCLUDED.tx_count,
                     size = EXCLUDED.size,
                     stripped_size = EXCLUDED.stripped_size,
                     weight = EXCLUDED.weight,
-                    extdata_type = EXCLUDED.extdata_type,
-                    signblock_challenge_hex = EXCLUDED.signblock_challenge_hex,
                     signblock_solution_hex = EXCLUDED.signblock_solution_hex,
-                    dynafed_current_params = EXCLUDED.dynafed_current_params,
-                    dynafed_proposed_params = EXCLUDED.dynafed_proposed_params,
-                    signblock_witness = EXCLUDED.signblock_witness,
                     txids = EXCLUDED.txids
                 """,
                 payloads,
@@ -526,22 +499,21 @@ class PostgresWriter:
             cur.executemany(
                 """
                 INSERT INTO transactions (
-                    network, txid, wtxid, hash, withash,
+                    txid, wtxid, hash, withash,
                     block_hash, block_height, block_time, tx_index_in_block, confirmed,
                     version, lock_time, size, vsize, weight, discount_vsize, discount_weight,
                     vin_count, vout_count,
                     fee_by_asset, explicit_in_by_asset, explicit_out_by_asset,
-                    has_any_confidential, has_pegin, has_pegout, has_issuance
+                    has_any_confidential, has_pegin, has_issuance
                 ) VALUES (
-                    %(network)s, %(txid)s, %(wtxid)s, %(hash)s, %(withash)s,
+                    %(txid)s, %(wtxid)s, %(hash)s, %(withash)s,
                     %(block_hash)s, %(block_height)s, %(block_time)s, %(tx_index_in_block)s, %(confirmed)s,
                     %(version)s, %(lock_time)s, %(size)s, %(vsize)s, %(weight)s, %(discount_vsize)s, %(discount_weight)s,
                     %(vin_count)s, %(vout_count)s,
                     %(fee_by_asset)s::jsonb, %(explicit_in_by_asset)s::jsonb, %(explicit_out_by_asset)s::jsonb,
-                    %(has_any_confidential)s, %(has_pegin)s, %(has_pegout)s, %(has_issuance)s
+                    %(has_any_confidential)s, %(has_pegin)s, %(has_issuance)s
                 )
                 ON CONFLICT (txid) DO UPDATE SET
-                    network = EXCLUDED.network,
                     wtxid = EXCLUDED.wtxid,
                     hash = EXCLUDED.hash,
                     withash = EXCLUDED.withash,
@@ -564,7 +536,6 @@ class PostgresWriter:
                     explicit_out_by_asset = EXCLUDED.explicit_out_by_asset,
                     has_any_confidential = EXCLUDED.has_any_confidential,
                     has_pegin = EXCLUDED.has_pegin,
-                    has_pegout = EXCLUDED.has_pegout,
                     has_issuance = EXCLUDED.has_issuance
                 """,
                 payloads,
@@ -586,30 +557,25 @@ class PostgresWriter:
             cur.executemany(
                 """
                 INSERT INTO txins (
-                    network, txid, vin,
+                    txid, vin,
                     prev_txid, prev_vout, sequence, is_coinbase,
                     scriptsig_hex, scriptsig_asm,
                     txinwitness, pegin_witness,
-                    is_pegin, pegin_value_sat, pegin_asset_id, pegin_genesis_hash,
-                    pegin_claim_script_hex, pegin_mainchain_tx_hex, pegin_merkle_proof_hex, pegin_referenced_block_hash,
+                    is_pegin,
                     has_issuance, issuance_asset_blinding_nonce, issuance_asset_entropy,
-                    issuance_amount, issuance_amount_commitment, issuance_inflation_keys, issuance_inflation_keys_commitment,
-                    prevout_asset_id, prevout_value_sat, prevout_value_commitment, prevout_asset_commitment,
+                    issuance_amount, issuance_inflation_keys,
                     prevout_scriptpubkey_hex, prevout_script_type, prevout_address
                 ) VALUES (
-                    %(network)s, %(txid)s, %(vin)s,
+                    %(txid)s, %(vin)s,
                     %(prev_txid)s, %(prev_vout)s, %(sequence)s, %(is_coinbase)s,
                     %(scriptsig_hex)s, %(scriptsig_asm)s,
                     %(txinwitness)s::jsonb, %(pegin_witness)s::jsonb,
-                    %(is_pegin)s, %(pegin_value_sat)s, %(pegin_asset_id)s, %(pegin_genesis_hash)s,
-                    %(pegin_claim_script_hex)s, %(pegin_mainchain_tx_hex)s, %(pegin_merkle_proof_hex)s, %(pegin_referenced_block_hash)s,
+                    %(is_pegin)s,
                     %(has_issuance)s, %(issuance_asset_blinding_nonce)s, %(issuance_asset_entropy)s,
-                    %(issuance_amount)s, %(issuance_amount_commitment)s, %(issuance_inflation_keys)s, %(issuance_inflation_keys_commitment)s,
-                    %(prevout_asset_id)s, %(prevout_value_sat)s, %(prevout_value_commitment)s, %(prevout_asset_commitment)s,
+                    %(issuance_amount)s, %(issuance_inflation_keys)s,
                     %(prevout_scriptpubkey_hex)s, %(prevout_script_type)s, %(prevout_address)s
                 )
                 ON CONFLICT (txid, vin) DO UPDATE SET
-                    network = EXCLUDED.network,
                     prev_txid = EXCLUDED.prev_txid,
                     prev_vout = EXCLUDED.prev_vout,
                     sequence = EXCLUDED.sequence,
@@ -619,24 +585,11 @@ class PostgresWriter:
                     txinwitness = EXCLUDED.txinwitness,
                     pegin_witness = EXCLUDED.pegin_witness,
                     is_pegin = EXCLUDED.is_pegin,
-                    pegin_value_sat = EXCLUDED.pegin_value_sat,
-                    pegin_asset_id = EXCLUDED.pegin_asset_id,
-                    pegin_genesis_hash = EXCLUDED.pegin_genesis_hash,
-                    pegin_claim_script_hex = EXCLUDED.pegin_claim_script_hex,
-                    pegin_mainchain_tx_hex = EXCLUDED.pegin_mainchain_tx_hex,
-                    pegin_merkle_proof_hex = EXCLUDED.pegin_merkle_proof_hex,
-                    pegin_referenced_block_hash = EXCLUDED.pegin_referenced_block_hash,
                     has_issuance = EXCLUDED.has_issuance,
                     issuance_asset_blinding_nonce = EXCLUDED.issuance_asset_blinding_nonce,
                     issuance_asset_entropy = EXCLUDED.issuance_asset_entropy,
                     issuance_amount = EXCLUDED.issuance_amount,
-                    issuance_amount_commitment = EXCLUDED.issuance_amount_commitment,
                     issuance_inflation_keys = EXCLUDED.issuance_inflation_keys,
-                    issuance_inflation_keys_commitment = EXCLUDED.issuance_inflation_keys_commitment,
-                    prevout_asset_id = EXCLUDED.prevout_asset_id,
-                    prevout_value_sat = EXCLUDED.prevout_value_sat,
-                    prevout_value_commitment = EXCLUDED.prevout_value_commitment,
-                    prevout_asset_commitment = EXCLUDED.prevout_asset_commitment,
                     prevout_scriptpubkey_hex = EXCLUDED.prevout_scriptpubkey_hex,
                     prevout_script_type = EXCLUDED.prevout_script_type,
                     prevout_address = EXCLUDED.prevout_address
@@ -652,26 +605,19 @@ class PostgresWriter:
             cur.executemany(
                 """
                 INSERT INTO txouts (
-                    network, txid, vout,
+                    txid, vout,
                     asset_id, asset_commitment, value_sat, value_commitment,
                     scriptpubkey_hex, scriptpubkey_asm, script_type, address,
                     is_op_return, op_return_data_hex,
-                    is_fee, is_pegout,
-                    pegout_chain_genesis_hash, pegout_btc_scriptpubkey_hex, pegout_value_sat, pegout_asset_id, pegout_extra_data_hex,
-                    nonce, surjection_proof, rangeproof,
-                    spent, spent_by_txid, spent_by_vin, spent_at_height
+                    is_fee, surjection_proof
                 ) VALUES (
-                    %(network)s, %(txid)s, %(vout)s,
+                    %(txid)s, %(vout)s,
                     %(asset_id)s, %(asset_commitment)s, %(value_sat)s, %(value_commitment)s,
                     %(scriptpubkey_hex)s, %(scriptpubkey_asm)s, %(script_type)s, %(address)s,
                     %(is_op_return)s, %(op_return_data_hex)s,
-                    %(is_fee)s, %(is_pegout)s,
-                    %(pegout_chain_genesis_hash)s, %(pegout_btc_scriptpubkey_hex)s, %(pegout_value_sat)s, %(pegout_asset_id)s, %(pegout_extra_data_hex)s,
-                    %(nonce)s, %(surjection_proof)s, %(rangeproof)s,
-                    %(spent)s, %(spent_by_txid)s, %(spent_by_vin)s, %(spent_at_height)s
+                    %(is_fee)s, %(surjection_proof)s
                 )
                 ON CONFLICT (txid, vout) DO UPDATE SET
-                    network = EXCLUDED.network,
                     asset_id = EXCLUDED.asset_id,
                     asset_commitment = EXCLUDED.asset_commitment,
                     value_sat = EXCLUDED.value_sat,
@@ -683,19 +629,7 @@ class PostgresWriter:
                     is_op_return = EXCLUDED.is_op_return,
                     op_return_data_hex = EXCLUDED.op_return_data_hex,
                     is_fee = EXCLUDED.is_fee,
-                    is_pegout = EXCLUDED.is_pegout,
-                    pegout_chain_genesis_hash = EXCLUDED.pegout_chain_genesis_hash,
-                    pegout_btc_scriptpubkey_hex = EXCLUDED.pegout_btc_scriptpubkey_hex,
-                    pegout_value_sat = EXCLUDED.pegout_value_sat,
-                    pegout_asset_id = EXCLUDED.pegout_asset_id,
-                    pegout_extra_data_hex = EXCLUDED.pegout_extra_data_hex,
-                    nonce = EXCLUDED.nonce,
-                    surjection_proof = EXCLUDED.surjection_proof,
-                    rangeproof = EXCLUDED.rangeproof,
-                    spent = EXCLUDED.spent,
-                    spent_by_txid = EXCLUDED.spent_by_txid,
-                    spent_by_vin = EXCLUDED.spent_by_vin,
-                    spent_at_height = EXCLUDED.spent_at_height
+                    surjection_proof = EXCLUDED.surjection_proof
                 """,
                 payloads,
             )

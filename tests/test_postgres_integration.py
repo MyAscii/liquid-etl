@@ -35,13 +35,32 @@ def test_postgres_writer_writes_rows():
                 "discountvsize": 90.0,
                 "discountweight": 360,
                 "fee": {"assetX": "0.00000100"},
-                "vin": [{"txid": "p0", "vout": 0, "sequence": 1, "scriptSig": {"hex": "00", "asm": ""}}],
-                "vout": [{"n": 0, "asset": "assetX", "value": "0.00000100", "scriptPubKey": {"type": "fee", "hex": "", "asm": ""}}],
+                "vin": [
+                    {
+                        "txid": "p0",
+                        "vout": 0,
+                        "sequence": 1,
+                        "scriptSig": {"hex": "00", "asm": ""},
+                        "prevout": {"asset": "assetX", "value": "0.00000100"},
+                        "issuance": {"assetamount": "1.0", "tokenamount": "2.0"},
+                    }
+                ],
+                "vout": [
+                    {
+                        "n": 0,
+                        "asset": "assetX",
+                        "value": "0.00000100",
+                        "nonce": "02",
+                        "surjectionproof": "sp",
+                        "rangeproof": "rp",
+                        "scriptPubKey": {"type": "fee", "hex": "", "asm": ""},
+                    }
+                ],
             }
         ],
     }
 
-    writer = PostgresWriter(dsn, network="liquidv1")
+    writer = PostgresWriter(dsn)
     try:
         block_row = normalize_block(raw_block, network="liquidv1")
         tx_row, txins, txouts = normalize_tx(raw_block["tx"][0], block_row, tx_index_in_block=0)
@@ -59,6 +78,10 @@ def test_postgres_writer_writes_rows():
             assert cur.fetchone()[0] >= 1
             cur.execute("SELECT COUNT(1) FROM txouts WHERE txid=%s", ("it_txid",))
             assert cur.fetchone()[0] >= 1
+            cur.execute("SELECT COUNT(1) FROM txins WHERE txid=%s AND issuance_amount IS NOT NULL", ("it_txid",))
+            assert cur.fetchone()[0] >= 1
+            cur.execute("SELECT COUNT(1) FROM transactions WHERE txid=%s AND explicit_in_by_asset IS NOT NULL", ("it_txid",))
+            assert cur.fetchone()[0] == 1
 
         with conn.cursor() as cur:
             cur.execute("DELETE FROM txouts WHERE txid=%s", ("it_txid",))
@@ -93,7 +116,7 @@ def test_real_rpc_block_can_be_written_to_postgres():
     dsn = os.environ["LIQUID_DSN"]
     network = rpc.getblockchaininfo().get("chain") or "liquidv1"
 
-    writer = PostgresWriter(dsn, network=network)
+    writer = PostgresWriter(dsn)
     try:
         block_row = normalize_block(raw_block, network=network)
         tx_rows = []
@@ -114,4 +137,3 @@ def test_real_rpc_block_can_be_written_to_postgres():
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(1) FROM blocks WHERE hash=%s", (raw_block.get("hash"),))
             assert cur.fetchone()[0] == 1
-

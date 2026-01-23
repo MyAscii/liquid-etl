@@ -95,6 +95,22 @@ def normalize_tx(
 
     fee_by_asset = amounts_map_to_satoshi_map(tx.get("fee"))
 
+    explicit_in_by_asset: Dict[str, int] = {}
+    for vin in vins:
+        if not isinstance(vin, dict):
+            continue
+        prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
+        if not isinstance(prevout, dict):
+            continue
+        asset = prevout.get("asset")
+        value = prevout.get("value")
+        if asset is None or value is None:
+            continue
+        sat = to_satoshi(value)
+        if sat is None:
+            continue
+        explicit_in_by_asset[str(asset)] = explicit_in_by_asset.get(str(asset), 0) + sat
+
     explicit_out_by_asset: Dict[str, int] = {}
     for vout in vouts:
         if not isinstance(vout, dict):
@@ -129,7 +145,7 @@ def normalize_tx(
         "vin_count": len(vins),
         "vout_count": len(vouts),
         "fee_by_asset": fee_by_asset,
-        "explicit_in_by_asset": None,
+        "explicit_in_by_asset": explicit_in_by_asset or None,
         "explicit_out_by_asset": explicit_out_by_asset or None,
         "has_any_confidential": has_any_confidential,
         "has_pegin": has_pegin,
@@ -171,8 +187,8 @@ def normalize_tx(
                 "txinwitness": witness,
                 "pegin_witness": vin.get("pegin_witness"),
                 "is_pegin": bool(vin.get("is_pegin")),
-                "pegin_value_sat": None,
-                "pegin_asset_id": None,
+                "pegin_value_sat": to_satoshi(vin.get("pegin_value")) if vin.get("pegin_value") is not None else None,
+                "pegin_asset_id": vin.get("pegin_asset"),
                 "pegin_genesis_hash": vin.get("pegin_genesis_hash"),
                 "pegin_claim_script_hex": vin.get("pegin_claim_script"),
                 "pegin_mainchain_tx_hex": vin.get("pegin_tx"),
@@ -185,11 +201,17 @@ def normalize_tx(
                 "issuance_asset_entropy": (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetEntropy")
                 if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
                 else None,
-                "issuance_amount": None,
+                "issuance_amount": to_satoshi((vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamount"))
+                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                and (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamount") is not None
+                else None,
                 "issuance_amount_commitment": (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamountcommitment")
                 if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
                 else None,
-                "issuance_inflation_keys": None,
+                "issuance_inflation_keys": to_satoshi((vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamount"))
+                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                and (vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamount") is not None
+                else None,
                 "issuance_inflation_keys_commitment": (vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamountcommitment")
                 if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
                 else None,

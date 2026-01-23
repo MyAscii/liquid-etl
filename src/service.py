@@ -138,7 +138,7 @@ class LiquidService:
             itype = None
             if vin.get("is_pegin"):
                 itype = "pegin"
-            if "issuance" in vin:
+            if "issuance" in vin or "assetissuance" in vin:
                 itype = "issuance"
             scriptsig = vin.get("scriptSig") if isinstance(vin.get("scriptSig"), dict) else {}
             is_coinbase_input = "coinbase" in vin
@@ -159,6 +159,10 @@ class LiquidService:
             if witness is None:
                 witness = vin.get("witness")
 
+            issuance = vin.get("issuance") if isinstance(vin.get("issuance"), dict) else None
+            if issuance is None and isinstance(vin.get("assetissuance"), dict):
+                issuance = vin.get("assetissuance")
+
             # Basic fields
             item: Dict[str, Any] = {
                 "txid": vin.get("txid"),
@@ -170,6 +174,16 @@ class LiquidService:
                 "scriptsig_hex": scriptsig_hex,
                 "coinbase_hex": coinbase_hex,
                 "witness": witness,
+                "is_pegin": bool(vin.get("is_pegin")),
+                "pegin_witness": vin.get("pegin_witness"),
+                "pegin_value": vin.get("pegin_value"),
+                "pegin_asset": vin.get("pegin_asset"),
+                "pegin_genesis_hash": vin.get("pegin_genesis_hash"),
+                "pegin_claim_script": vin.get("pegin_claim_script"),
+                "pegin_tx": vin.get("pegin_tx"),
+                "pegin_txout_proof": vin.get("pegin_txout_proof"),
+                "pegin_blockhash": vin.get("pegin_blockhash"),
+                "issuance": issuance,
             }
             prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
             if prevout:
@@ -200,10 +214,12 @@ class LiquidService:
             is_pegout = bool(
                 vout.get("is_pegout")
                 or vout.get("pegout")
+                or vout.get("pegout_chain")
                 or (isinstance(spk, dict) and (spk.get("pegout") or spk.get("type") == "pegout"))
             )
+            is_fee = bool(vout.get("is_fee") or (isinstance(spk, dict) and spk.get("type") == "fee"))
             # Assign type with pegout priority, then confidential
-            otype = "pegout" if is_pegout else ("confidential" if is_confidential else None)
+            otype = "pegout" if is_pegout else ("fee" if is_fee else ("confidential" if is_confidential else None))
             if is_confidential:
                 confidential_present = True
             else:
@@ -215,19 +231,31 @@ class LiquidService:
             scriptpubkey_hex = spk.get("hex") if isinstance(spk, dict) else None
             scriptpubkey_asm = spk.get("asm") if isinstance(spk, dict) else None
             op_return_data_hex = extract_op_return_data_hex(scriptpubkey_hex)
-            outputs.append({
-                "value": value,
-                "confidential_value": vcommit,
-                "asset": asset,
-                "type": otype,
-                "n": vout.get("n"),
-                "addresses": addrs,
-                "required_signatures": req_sigs,
-                "scriptpubkey_asm": scriptpubkey_asm,
-                "scriptpubkey_hex": scriptpubkey_hex,
-                "script_type": spk.get("type") if isinstance(spk, dict) else None,
-                "op_return_data_hex": op_return_data_hex,
-            })
+            pegout = vout.get("pegout") if isinstance(vout.get("pegout"), dict) else None
+            outputs.append(
+                {
+                    "value": value,
+                    "confidential_value": vcommit,
+                    "asset_commitment": acommit,
+                    "asset": asset,
+                    "type": otype,
+                    "n": vout.get("n"),
+                    "addresses": addrs,
+                    "required_signatures": req_sigs,
+                    "scriptpubkey_asm": scriptpubkey_asm,
+                    "scriptpubkey_hex": scriptpubkey_hex,
+                    "script_type": spk.get("type") if isinstance(spk, dict) else None,
+                    "op_return_data_hex": op_return_data_hex,
+                    "nonce": vout.get("nonce"),
+                    "surjection_proof": vout.get("surjectionproof"),
+                    "rangeproof": vout.get("rangeproof"),
+                    "pegout_chain_genesis_hash": pegout.get("genesis_hash") if pegout else None,
+                    "pegout_btc_scriptpubkey_hex": pegout.get("scriptpubkey") if pegout else None,
+                    "pegout_value": pegout.get("value") if pegout else None,
+                    "pegout_asset": pegout.get("asset") if pegout else None,
+                    "pegout_extra_data_hex": pegout.get("extra_data") if pegout else None,
+                }
+            )
 
         # Totals and fee: only computable if non-confidential
         fee = None

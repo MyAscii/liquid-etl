@@ -189,8 +189,8 @@ def _cmd_ingest_range_to_postgres(args: argparse.Namespace) -> int:
         return f"{m:d}:{s:02d}"
 
     rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
-    network = rpc.getblockchaininfo().get("chain") or "liquidv1"
-    writer = PostgresWriter(args.dsn, network=network)
+    network = "liquidv1"
+    writer = PostgresWriter(args.dsn)
     total = args.end_block - args.start_block + 1
     show_progress = bool(getattr(args, "progress", False))
     if getattr(args, "no_progress", False):
@@ -277,11 +277,11 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
 
     dedupe = not bool(getattr(args, "no_dedupe", False))
     fill_gaps = not bool(getattr(args, "no_fill_gaps", False))
+    backfill_present = bool(getattr(args, "backfill_present", False))
 
-    network = args.network or "liquidv1"
     rpc = None
 
-    writer = PostgresWriter(args.dsn, network=network)
+    writer = PostgresWriter(args.dsn)
     show_progress = bool(getattr(args, "progress", False))
     if getattr(args, "no_progress", False):
         show_progress = False
@@ -291,8 +291,7 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
     def _db_height_bounds():
         with writer.conn.cursor() as cur:
             cur.execute(
-                "SELECT MIN(height), MAX(height) FROM blocks WHERE network=%s AND height IS NOT NULL",
-                (network,),
+                "SELECT MIN(height), MAX(height) FROM blocks WHERE height IS NOT NULL",
             )
             row = cur.fetchone()
             if not row:
@@ -318,12 +317,12 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                     """
                     SELECT height, COUNT(*) AS c
                     FROM blocks
-                    WHERE network=%s AND height IS NOT NULL AND height BETWEEN %s AND %s
+                    WHERE height IS NOT NULL AND height BETWEEN %s AND %s
                     GROUP BY height
                     HAVING COUNT(*) > 1
                     ORDER BY height
                     """,
-                    (network, start_h, end_h),
+                    (start_h, end_h),
                 )
                 dup_heights = [(int(r[0]), int(r[1])) for r in (cur.fetchall() or [])]
 
@@ -339,17 +338,17 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                         SELECT b.hash
                         FROM blocks b
                         LEFT JOIN transactions t ON t.block_hash = b.hash
-                        WHERE b.network=%s AND b.height=%s
+                        WHERE b.height=%s
                         GROUP BY b.hash
                         ORDER BY COUNT(t.txid) DESC, MAX(b.time) DESC NULLS LAST, b.hash DESC
                         LIMIT 1
                         """,
-                        (network, h),
+                        (h,),
                     )
                     keep_hash = cur.fetchone()[0]
                     cur.execute(
-                        "SELECT hash FROM blocks WHERE network=%s AND height=%s AND hash <> %s",
-                        (network, h, keep_hash),
+                        "SELECT hash FROM blocks WHERE height=%s AND hash <> %s",
+                        (h, keep_hash),
                     )
                     delete_hashes = [r[0] for r in (cur.fetchall() or [])]
 
@@ -363,25 +362,25 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                 with writer.conn.transaction():
                     with writer.conn.cursor() as cur:
                         cur.execute(
-                            "SELECT txid FROM transactions WHERE network=%s AND block_hash = ANY(%s)",
-                            (network, delete_hashes),
+                            "SELECT txid FROM transactions WHERE block_hash = ANY(%s)",
+                            (delete_hashes,),
                         )
                         txids = [r[0] for r in (cur.fetchall() or [])]
                         if txids:
-                            cur.execute("DELETE FROM txins WHERE network=%s AND txid = ANY(%s)", (network, txids))
-                            cur.execute("DELETE FROM txouts WHERE network=%s AND txid = ANY(%s)", (network, txids))
-                            cur.execute("DELETE FROM transactions WHERE network=%s AND txid = ANY(%s)", (network, txids))
+                            cur.execute("DELETE FROM txins WHERE txid = ANY(%s)", (txids,))
+                            cur.execute("DELETE FROM txouts WHERE txid = ANY(%s)", (txids,))
+                            cur.execute("DELETE FROM transactions WHERE txid = ANY(%s)", (txids,))
                         cur.execute(
-                            "DELETE FROM blocks WHERE network=%s AND hash = ANY(%s)",
-                            (network, delete_hashes),
+                            "DELETE FROM blocks WHERE hash = ANY(%s)",
+                            (delete_hashes,),
                         )
                 print(f"Deduped height={h}: kept={keep_hash}, removed_blocks={len(delete_hashes)}", file=sys.stderr)
 
         if fill_gaps:
             with writer.conn.cursor() as cur:
                 cur.execute(
-                    "SELECT MIN(height), MAX(height) FROM blocks WHERE network=%s AND height IS NOT NULL AND height BETWEEN %s AND %s",
-                    (network, start_h, end_h),
+                    "SELECT MIN(height), MAX(height) FROM blocks WHERE height IS NOT NULL AND height BETWEEN %s AND %s",
+                    (start_h, end_h),
                 )
                 row = cur.fetchone() or (None, None)
                 present_min = int(row[0]) if row[0] is not None else None
@@ -391,7 +390,7 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                     WITH heights AS (
                         SELECT DISTINCT height
                         FROM blocks
-                        WHERE network=%s AND height IS NOT NULL AND height BETWEEN %s AND %s
+                        WHERE height IS NOT NULL AND height BETWEEN %s AND %s
                     ),
                     ordered AS (
                         SELECT height, LEAD(height) OVER (ORDER BY height) AS next_height
@@ -402,7 +401,7 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                     WHERE next_height IS NOT NULL AND next_height > height + 1
                     ORDER BY start_missing
                     """,
-                    (network, start_h, end_h),
+                    (start_h, end_h),
                 )
                 gaps = [(int(r[0]), int(r[1])) for r in (cur.fetchall() or [])]
 
@@ -424,9 +423,13 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                     merged.append([a, b])
             gaps = [(a, b) for a, b in merged]
 
+            if backfill_present:
+                gaps = [(start_h, end_h)]
+
             if gaps:
                 missing_blocks = sum((b - a + 1) for a, b in gaps)
-                print(f"Found {missing_blocks} missing blocks in {len(gaps)} gaps", file=sys.stderr)
+                label = "blocks to (re)ingest" if backfill_present else "missing blocks"
+                print(f"Found {missing_blocks} {label} in {len(gaps)} gaps", file=sys.stderr)
             else:
                 print("No missing block gaps found", file=sys.stderr)
 
@@ -475,7 +478,7 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
                     all_txout_rows = []
 
                     for raw_block in raw_blocks:
-                        block_row = normalize_block(raw_block, network=network)
+                        block_row = normalize_block(raw_block, network="liquidv1")
                         block_rows.append(block_row)
                         for tx_index, raw_tx in enumerate(raw_block.get("tx", []) or []):
                             if not isinstance(raw_tx, dict):
@@ -511,6 +514,34 @@ def _cmd_repair_postgres(args: argparse.Namespace) -> int:
         return 0
     finally:
         writer.close()
+
+
+def _cmd_audit_rpc_schema(args: argparse.Namespace) -> int:
+    import json
+
+    from .rpc import LiquidRpc
+    from .utils.rpc_schema_audit import audit_rpc_blocks, suggest_prunable_postgres_columns, to_postgres_drop_column_sql
+
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
+    head = rpc.getblockcount()
+    sample_size = max(1, int(args.sample_size))
+    heights = []
+    start = max(0, head - sample_size + 1)
+    for h in range(start, head + 1):
+        heights.append(h)
+
+    hashes = rpc.batch_call([("getblockhash", [h]) for h in heights])
+    blocks = rpc.batch_call([("getblock", [bh, 3]) for bh in hashes])
+    audit = audit_rpc_blocks(blocks)
+    prunable = suggest_prunable_postgres_columns(audit)
+
+    out = audit.as_dict()
+    out["head"] = head
+    out["sampled_heights"] = heights
+    out["prunable_postgres_columns_suggestion"] = prunable
+    out["prunable_postgres_drop_sql"] = to_postgres_drop_column_sql(prunable)
+    print(json.dumps(out, indent=2, sort_keys=True))
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -606,17 +637,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Elements/Liquid datadir (optional). Used to read .cookie or elements.conf when provider-uri has no creds.",
     )
     p_repair_pg.add_argument("--dsn", required=True, help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl")
-    p_repair_pg.add_argument("--network", help="Network label stored in DB (default: liquidv1)")
     p_repair_pg.add_argument("--start-block", type=int, help="Only repair >= this height (default: DB min)")
     p_repair_pg.add_argument("--end-block", type=int, help="Only repair <= this height (default: DB max)")
     p_repair_pg.add_argument("--dry-run", action="store_true", help="Report gaps/dupes but do not change DB")
     p_repair_pg.add_argument("--no-dedupe", action="store_true", help="Skip duplicate-height cleanup")
     p_repair_pg.add_argument("--no-fill-gaps", action="store_true", help="Skip filling missing heights")
+    p_repair_pg.add_argument("--backfill-present", action="store_true", help="Re-ingest all heights in the selected range (requires RPC)")
     p_repair_pg.add_argument("--rpc-batch-size", type=int, default=25, help="Batch size for RPC calls (reduces round trips)")
     pbar2 = p_repair_pg.add_mutually_exclusive_group(required=False)
     pbar2.add_argument("--progress", action="store_true", help="Force progress output")
     pbar2.add_argument("--no-progress", action="store_true", help="Disable progress output")
     p_repair_pg.set_defaults(func=_cmd_repair_postgres)
+
+    p_audit_rpc = sub.add_parser("audit_rpc_schema", help="Probe node RPC output and suggest schema cleanup")
+    _add_common_provider(p_audit_rpc)
+    p_audit_rpc.add_argument("--sample-size", type=int, default=10, help="Number of blocks sampled from chain tip")
+    p_audit_rpc.set_defaults(func=_cmd_audit_rpc_schema)
 
     return parser
 

@@ -51,7 +51,7 @@ def test_normalize_coinbase_scriptsig_and_witness():
     }
     norm = s._normalize_tx(tx, block_item, tx_index=0)
     assert norm["hash"] == tx["txid"]
-    assert norm["raw_tx"]["txid"] == tx["txid"]
+    assert norm["txid"] == tx["txid"]
     assert norm["weight"] == 773
     assert norm["inputs"][0]["is_coinbase"] is True
     assert norm["inputs"][0]["scriptsig_hex"] == "01710101"

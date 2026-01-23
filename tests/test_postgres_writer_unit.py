@@ -81,7 +81,7 @@ def _install_fake_psycopg(monkeypatch, state):
 def test_migrate_renames_legacy_tables(monkeypatch):
     state = {"tables": {"blocks": {"number"}, "transactions": {"tx_index"}}, "renames": []}
     _install_fake_psycopg(monkeypatch, state)
-    pg_mod.PostgresWriter("postgresql://x", network="liquidv1")
+    pg_mod.PostgresWriter("postgresql://x")
     assert ("blocks", "blocks_legacy") in state["renames"]
     assert ("transactions", "transactions_legacy") in state["renames"]
 
@@ -89,7 +89,7 @@ def test_migrate_renames_legacy_tables(monkeypatch):
 def test_migrate_renames_v2_tables(monkeypatch):
     state = {"tables": {"blocks_v2": {"height"}, "transactions_v2": {"txid"}, "txins_v2": {"txid"}, "txouts_v2": {"txid"}}, "renames": []}
     _install_fake_psycopg(monkeypatch, state)
-    pg_mod.PostgresWriter("postgresql://x", network="liquidv1")
+    pg_mod.PostgresWriter("postgresql://x")
     assert ("blocks_v2", "blocks") in state["renames"]
     assert ("transactions_v2", "transactions") in state["renames"]
     assert ("txins_v2", "txins") in state["renames"]
@@ -99,5 +99,119 @@ def test_migrate_renames_v2_tables(monkeypatch):
 def test_migrate_does_not_rename_when_targets_exist(monkeypatch):
     state = {"tables": {"blocks": {"height"}, "blocks_v2": {"height"}}, "renames": []}
     _install_fake_psycopg(monkeypatch, state)
-    pg_mod.PostgresWriter("postgresql://x", network="liquidv1")
+    pg_mod.PostgresWriter("postgresql://x")
     assert ("blocks_v2", "blocks") not in state["renames"]
+
+
+def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
+    state = {"tables": {"blocks": {"height"}, "transactions": {"txid"}, "txins": {"txid"}, "txouts": {"txid"}}, "renames": []}
+    _install_fake_psycopg(monkeypatch, state)
+    w = pg_mod.PostgresWriter("postgresql://x")
+
+    tx = {
+        "txid": "t1",
+        "hash": "t1",
+        "withash": None,
+        "wtxid": None,
+        "block_hash": "b1",
+        "block_number": 1,
+        "block_timestamp": 10,
+        "version": 2,
+        "lock_time": 0,
+        "size": 100,
+        "virtual_size": 90,
+        "weight": 360,
+        "discount_virtual_size": 90,
+        "discount_weight": 360,
+        "node_fee": {"assetX": "0.00000100"},
+        "inputs": [
+            {
+                "txid": "p0",
+                "vout": 0,
+                "sequence": 1,
+                "input_type": "issuance",
+                "is_coinbase": False,
+                "scriptsig_hex": "00",
+                "scriptsig_asm": "",
+                "witness": [],
+                "issuance": {"assetamount": "1.0", "tokenamount": "2.0"},
+            }
+        ],
+        "outputs": [
+            {
+                "n": 0,
+                "asset": "assetX",
+                "value": "0.00000100",
+                "type": "fee",
+                "scriptpubkey_hex": "",
+                "scriptpubkey_asm": "",
+                "script_type": "fee",
+                "op_return_data_hex": None,
+                "nonce": "02",
+                "surjection_proof": "sp",
+                "rangeproof": "rp",
+            }
+        ],
+    }
+
+    tx_row, txins, txouts = w._coerce_tx_rows(tx)
+    assert tx_row["fee_by_asset"] == {"assetX": 100}
+    assert tx_row["explicit_out_by_asset"] == {"assetX": 100}
+    assert tx_row["explicit_in_by_asset"] is None
+    assert len(txins) == 1
+    assert txins[0]["has_issuance"] is True
+    assert txins[0]["issuance_amount"] == 100000000
+    assert txins[0]["issuance_inflation_keys"] == 200000000
+    assert len(txouts) == 1
+    assert txouts[0]["is_fee"] is True
+    assert txouts[0]["surjection_proof"] == "sp"
+
+
+def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
+    state = {"tables": {"blocks": {"height"}, "transactions": {"txid"}, "txins": {"txid"}, "txouts": {"txid"}}, "renames": []}
+    _install_fake_psycopg(monkeypatch, state)
+    w = pg_mod.PostgresWriter("postgresql://x")
+
+    block = {
+        "hash": "b1",
+        "number": 1,
+        "version": 2,
+        "previous_block_hash": "p",
+        "next_block_hash": None,
+        "merkle_root": "m",
+        "timestamp": 10,
+        "median_time": 11,
+        "nonce": None,
+        "bits": None,
+        "difficulty": None,
+        "chainwork": None,
+        "transaction_count": 1,
+        "size": 100,
+        "stripped_size": 90,
+        "weight": 360,
+        "signblock_challenge": None,
+        "signblock_witness_hex": None,
+        "dynafed_current_params": None,
+        "dynafed_proposed_params": None,
+        "signblock_witness": None,
+        "txids": ["t1"],
+    }
+
+    row = w._coerce_block_row(block)
+    expected = {
+        "hash",
+        "height",
+        "version",
+        "prev_block_hash",
+        "next_block_hash",
+        "merkle_root",
+        "time",
+        "median_time",
+        "tx_count",
+        "size",
+        "stripped_size",
+        "weight",
+        "signblock_solution_hex",
+        "txids",
+    }
+    assert expected.issubset(set(row.keys()))

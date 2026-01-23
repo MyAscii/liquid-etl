@@ -24,7 +24,23 @@ def test_normalizer_fee_output_and_confidential_detection():
                 "discountvsize": 90.5,
                 "discountweight": 362,
                 "fee": {"assetX": "0.00000100"},
-                "vin": [{"txid": "p0", "vout": 0, "sequence": 1, "scriptSig": {"hex": "00", "asm": ""}}],
+                "vin": [
+                    {
+                        "txid": "p0",
+                        "vout": 0,
+                        "sequence": 1,
+                        "scriptSig": {"hex": "00", "asm": ""},
+                        "prevout": {"asset": "assetX", "value": "0.00000100"},
+                        "issuance": {
+                            "assetBlindingNonce": "00",
+                            "assetEntropy": "11",
+                            "assetamount": "1.0",
+                            "tokenamount": "2.0",
+                            "assetamountcommitment": "aa",
+                            "tokenamountcommitment": "bb",
+                        },
+                    }
+                ],
                 "vout": [
                     {"n": 0, "asset": "assetX", "value": "0.00000100", "scriptPubKey": {"type": "fee", "hex": "", "asm": ""}},
                     {"n": 1, "assetcommitment": "ac", "valuecommitment": "vc", "scriptPubKey": {"type": "nulldata", "hex": "6a", "asm": "OP_RETURN"}},
@@ -38,8 +54,12 @@ def test_normalizer_fee_output_and_confidential_detection():
     tx_row, txins, txouts = normalize_tx(raw_block["tx"][0], block_row, tx_index_in_block=0)
     assert tx_row["fee_by_asset"]["assetX"] == 100
     assert tx_row["has_any_confidential"] is True
+    assert tx_row["explicit_in_by_asset"]["assetX"] == 100
     assert tx_row["explicit_out_by_asset"]["assetX"] == 100
     assert len(txins) == 1
+    assert txins[0]["has_issuance"] is True
+    assert txins[0]["issuance_amount"] == 100000000
+    assert txins[0]["issuance_inflation_keys"] == 200000000
     assert len(txouts) == 2
     assert txouts[0]["is_fee"] is True
 
@@ -86,6 +106,20 @@ def test_normalize_tx_pegout_and_op_return_detection():
     assert txouts[0]["is_pegout"] is True
     assert txouts[1]["is_op_return"] is True
     assert txouts[1]["op_return_data_hex"] == "deadbeef"
+
+
+def test_normalize_tx_pegin_value_and_asset():
+    raw_block = {"hash": "bh", "height": 1, "time": 10}
+    block_row = normalize_block(raw_block, network="liquidv1")
+    tx = {
+        "txid": "t1",
+        "vin": [{"txid": "p0", "vout": 0, "sequence": 1, "is_pegin": True, "pegin_value": "0.5", "pegin_asset": "assetX"}],
+        "vout": [{"n": 0, "asset": "assetX", "value": "0.1", "scriptPubKey": {"type": "fee", "hex": "", "asm": ""}}],
+    }
+    _, txins, _ = normalize_tx(tx, block_row, tx_index_in_block=0)
+    assert txins[0]["is_pegin"] is True
+    assert txins[0]["pegin_asset_id"] == "assetX"
+    assert txins[0]["pegin_value_sat"] == 50000000
 
 
 def test_monkey_normalizer_random_inputs_do_not_crash():
