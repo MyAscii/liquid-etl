@@ -12,7 +12,13 @@ from ..utils.tx_enrichment import inline_enrich_inputs
 
 
 class LiquidStreamerAdapter:
-    def __init__(self, service: LiquidService, output: str = "console", batch_size: int = 100, enrich: bool = False):
+    def __init__(
+        self,
+        service: LiquidService,
+        output: str = "console",
+        batch_size: int = 100,
+        enrich: bool = False,
+    ):
         self.service = service
         self.output = output
         self.batch_size = batch_size
@@ -24,15 +30,18 @@ class LiquidStreamerAdapter:
         if output and output.startswith("projects/"):
             try:
                 from google.cloud import pubsub_v1
+
                 self._pubsub = pubsub_v1.PublisherClient()
                 self._topics = {
                     "blocks": f"{output}.blocks",
                     "transactions": f"{output}.transactions",
                 }
             except Exception:
-                raise RuntimeError("google-cloud-pubsub not installed; install with pip install -e .[streaming]")
+                raise RuntimeError(
+                    "google-cloud-pubsub not installed; install with pip install -e .[streaming]"
+                )
         elif output and output.startswith("sqlite://"):
-            path = output[len("sqlite://"):]
+            path = output[len("sqlite://") :]
             self._db = SQLiteWriter(path)
         elif output and (output.startswith("postgres://") or output.startswith("postgresql://")):
             self._db = PostgresWriter(output)
@@ -47,6 +56,7 @@ class LiquidStreamerAdapter:
 
         def default(o):
             from decimal import Decimal
+
             if isinstance(o, Decimal):
                 return str(o)
             raise TypeError(f"Object of type {o.__class__.__name__} is not JSON serializable")
@@ -64,6 +74,7 @@ class LiquidStreamerAdapter:
 
     def stream(self, start_block: int, lag: int = 0, poll_interval: float = 2.0) -> None:
         import sys
+
         current = start_block
         batch_count = 0
         last_log_time = 0.0
@@ -73,11 +84,13 @@ class LiquidStreamerAdapter:
                     head = self.service.get_head_height() - max(0, lag)
                     if current > head:
                         # We are caught up
-                        sys.stderr.write(f"\rWaiting for new blocks... (current: {current - 1}, head: {head})   ")
+                        sys.stderr.write(
+                            f"\rWaiting for new blocks... (current: {current - 1}, head: {head})   "
+                        )
                         sys.stderr.flush()
                         time.sleep(poll_interval)
                         continue
-                    
+
                     # We are catching up
                     emitted = 0
                     while emitted < self.batch_size and current <= head:
@@ -96,7 +109,9 @@ class LiquidStreamerAdapter:
                         now = time.monotonic()
                         if now - last_log_time >= 1.0:
                             remaining = head - current + 1
-                            sys.stderr.write(f"\rCatching up: processed block {current-1} (target: {head}, {remaining} left)   ")
+                            sys.stderr.write(
+                                f"\rCatching up: processed block {current-1} (target: {head}, {remaining} left)   "
+                            )
                             sys.stderr.flush()
                             last_log_time = now
 

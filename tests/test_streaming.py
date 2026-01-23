@@ -1,10 +1,12 @@
+from liquidetl.service import BlockWithTxs, LiquidService
 from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
-from liquidetl.service import LiquidService, BlockWithTxs
 
 
 class StubService(LiquidService):
     def __init__(self):
-        class _R: pass
+        class _R:
+            pass
+
         super().__init__(_R())
         self._called = 0
 

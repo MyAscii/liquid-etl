@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from liquidetl.jobs.export_all_job import export_all
 from liquidetl.service import BlockWithTxs
 
@@ -16,13 +14,17 @@ class StubService:
     class rpc:
         @staticmethod
         def getrawtransaction(txid: str, verbose: bool = True):
-            return {"vout": [{"value": 0.1, "asset": "assetid", "scriptPubKey": {"address": "el1z"}}]}
+            return {
+                "vout": [{"value": 0.1, "asset": "assetid", "scriptPubKey": {"address": "el1z"}}]
+            }
 
 
 def test_export_all_creates_hive_dirs(tmp_path):
     service = StubService()
     out_dir = tmp_path / "output"
-    export_all(service=service, output_dir=str(out_dir), date="2020-01-01", batch_size=2, enrich=True)
+    export_all(
+        service=service, output_dir=str(out_dir), date="2020-01-01", batch_size=2, enrich=True
+    )
     # Check directories and files
     chain_dir = out_dir / "chain=liquid" / "date=2020-01-01"
     batches = list(chain_dir.glob("block_start=*"))

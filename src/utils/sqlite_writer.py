@@ -1,6 +1,6 @@
-import sqlite3
 import json
-from typing import Any, Dict, Optional, Set
+import sqlite3
+from typing import Any, Dict, Set
 
 
 class SQLiteWriter:
@@ -11,8 +11,7 @@ class SQLiteWriter:
 
     def _init_schema(self) -> None:
         cur = self.conn.cursor()
-        cur.execute(
-            """
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS blocks (
                 hash TEXT PRIMARY KEY,
                 number INTEGER,
@@ -34,10 +33,8 @@ class SQLiteWriter:
                 signblock_witness_asm TEXT,
                 signblock_witness_hex TEXT
             )
-            """
-        )
-        cur.execute(
-            """
+            """)
+        cur.execute("""
             CREATE TABLE IF NOT EXISTS transactions (
                 hash TEXT,
                 txid TEXT,
@@ -67,8 +64,7 @@ class SQLiteWriter:
                 outputs TEXT,
                 PRIMARY KEY (hash, "index")
             )
-            """
-        )
+            """)
         cur.close()
 
         self._ensure_columns(
@@ -169,7 +165,8 @@ class SQLiteWriter:
                 "bits": block.get("bits"),
                 "previous_block_hash": block.get("previous_block_hash"),
                 "next_block_hash": block.get("next_block_hash"),
-                "transaction_count": block.get("transaction_count") or (block.get("n_tx") if block.get("n_tx") is not None else None),
+                "transaction_count": block.get("transaction_count")
+                or (block.get("n_tx") if block.get("n_tx") is not None else None),
                 "signblock_challenge": block.get("signblock_challenge"),
                 "signblock_witness_asm": block.get("signblock_witness_asm"),
                 "signblock_witness_hex": block.get("signblock_witness_hex"),
@@ -250,7 +247,11 @@ class SQLiteWriter:
                 "input_value": tx.get("input_value"),
                 "output_value": tx.get("output_value"),
                 "fee": tx.get("fee"),
-                "node_fee": json.dumps(tx.get("node_fee"), default=str) if tx.get("node_fee") is not None else None,
+                "node_fee": (
+                    json.dumps(tx.get("node_fee"), default=str)
+                    if tx.get("node_fee") is not None
+                    else None
+                ),
                 "inputs": json.dumps(tx.get("inputs", []), default=str),
                 "outputs": json.dumps(tx.get("outputs", []), default=str),
             },

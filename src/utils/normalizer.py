@@ -14,7 +14,11 @@ def normalize_block(block: Dict[str, Any], network: str) -> Dict[str, Any]:
             txids.append(t.get("txid"))
 
     extdata_type = None
-    if block.get("signblock_challenge") or block.get("signblock_witness_hex") or block.get("signblock_witness_asm"):
+    if (
+        block.get("signblock_challenge")
+        or block.get("signblock_witness_hex")
+        or block.get("signblock_witness_asm")
+    ):
         extdata_type = "proof"
 
     return {
@@ -88,7 +92,12 @@ def normalize_tx(
     for vout in vouts:
         if not isinstance(vout, dict):
             continue
-        if vout.get("valuecommitment") or vout.get("assetcommitment") or vout.get("surjectionproof") or vout.get("rangeproof"):
+        if (
+            vout.get("valuecommitment")
+            or vout.get("assetcommitment")
+            or vout.get("surjectionproof")
+            or vout.get("rangeproof")
+        ):
             has_any_confidential = True
         if _is_pegout(vout):
             has_pegout = True
@@ -158,7 +167,9 @@ def normalize_tx(
         if not isinstance(vin, dict):
             continue
         scriptsig = vin.get("scriptSig") if isinstance(vin.get("scriptSig"), dict) else {}
-        scriptsig_hex = scriptsig.get("hex") or (vin.get("coinbase") if vin.get("coinbase") else None)
+        scriptsig_hex = scriptsig.get("hex") or (
+            vin.get("coinbase") if vin.get("coinbase") else None
+        )
         scriptsig_asm = scriptsig.get("asm")
         if scriptsig_hex and not scriptsig_asm:
             try:
@@ -171,7 +182,11 @@ def normalize_tx(
             witness = vin.get("witness")
 
         prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
-        spk = prevout.get("scriptPubKey", {}) if isinstance(prevout, dict) and isinstance(prevout.get("scriptPubKey"), dict) else {}
+        spk = (
+            prevout.get("scriptPubKey", {})
+            if isinstance(prevout, dict) and isinstance(prevout.get("scriptPubKey"), dict)
+            else {}
+        )
 
         txins.append(
             {
@@ -187,7 +202,11 @@ def normalize_tx(
                 "txinwitness": witness,
                 "pegin_witness": vin.get("pegin_witness"),
                 "is_pegin": bool(vin.get("is_pegin")),
-                "pegin_value_sat": to_satoshi(vin.get("pegin_value")) if vin.get("pegin_value") is not None else None,
+                "pegin_value_sat": (
+                    to_satoshi(vin.get("pegin_value"))
+                    if vin.get("pegin_value") is not None
+                    else None
+                ),
                 "pegin_asset_id": vin.get("pegin_asset"),
                 "pegin_genesis_hash": vin.get("pegin_genesis_hash"),
                 "pegin_claim_script_hex": vin.get("pegin_claim_script"),
@@ -195,30 +214,62 @@ def normalize_tx(
                 "pegin_merkle_proof_hex": vin.get("pegin_txout_proof"),
                 "pegin_referenced_block_hash": vin.get("pegin_blockhash"),
                 "has_issuance": bool("issuance" in vin or "assetissuance" in vin),
-                "issuance_asset_blinding_nonce": (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetBlindingNonce")
-                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
-                else None,
-                "issuance_asset_entropy": (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetEntropy")
-                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
-                else None,
-                "issuance_amount": to_satoshi((vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamount"))
-                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
-                and (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamount") is not None
-                else None,
-                "issuance_amount_commitment": (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamountcommitment")
-                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
-                else None,
-                "issuance_inflation_keys": to_satoshi((vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamount"))
-                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
-                and (vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamount") is not None
-                else None,
-                "issuance_inflation_keys_commitment": (vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamountcommitment")
-                if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
-                else None,
+                "issuance_asset_blinding_nonce": (
+                    (vin.get("issuance") or vin.get("assetissuance") or {}).get(
+                        "assetBlindingNonce"
+                    )
+                    if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                    else None
+                ),
+                "issuance_asset_entropy": (
+                    (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetEntropy")
+                    if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                    else None
+                ),
+                "issuance_amount": (
+                    to_satoshi(
+                        (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamount")
+                    )
+                    if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                    and (vin.get("issuance") or vin.get("assetissuance") or {}).get("assetamount")
+                    is not None
+                    else None
+                ),
+                "issuance_amount_commitment": (
+                    (vin.get("issuance") or vin.get("assetissuance") or {}).get(
+                        "assetamountcommitment"
+                    )
+                    if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                    else None
+                ),
+                "issuance_inflation_keys": (
+                    to_satoshi(
+                        (vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamount")
+                    )
+                    if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                    and (vin.get("issuance") or vin.get("assetissuance") or {}).get("tokenamount")
+                    is not None
+                    else None
+                ),
+                "issuance_inflation_keys_commitment": (
+                    (vin.get("issuance") or vin.get("assetissuance") or {}).get(
+                        "tokenamountcommitment"
+                    )
+                    if isinstance(vin.get("issuance") or vin.get("assetissuance"), dict)
+                    else None
+                ),
                 "prevout_asset_id": prevout.get("asset") if isinstance(prevout, dict) else None,
-                "prevout_value_sat": to_satoshi(prevout.get("value")) if isinstance(prevout, dict) and prevout.get("value") is not None else None,
-                "prevout_value_commitment": prevout.get("valuecommitment") if isinstance(prevout, dict) else None,
-                "prevout_asset_commitment": prevout.get("assetcommitment") if isinstance(prevout, dict) else None,
+                "prevout_value_sat": (
+                    to_satoshi(prevout.get("value"))
+                    if isinstance(prevout, dict) and prevout.get("value") is not None
+                    else None
+                ),
+                "prevout_value_commitment": (
+                    prevout.get("valuecommitment") if isinstance(prevout, dict) else None
+                ),
+                "prevout_asset_commitment": (
+                    prevout.get("assetcommitment") if isinstance(prevout, dict) else None
+                ),
                 "prevout_scriptpubkey_hex": spk.get("hex") if isinstance(spk, dict) else None,
                 "prevout_script_type": spk.get("type") if isinstance(spk, dict) else None,
                 "prevout_address": _pick_address(spk),
@@ -242,7 +293,9 @@ def normalize_tx(
                 "vout": vout.get("n"),
                 "asset_id": vout.get("asset"),
                 "asset_commitment": vout.get("assetcommitment"),
-                "value_sat": to_satoshi(vout.get("value")) if vout.get("value") is not None else None,
+                "value_sat": (
+                    to_satoshi(vout.get("value")) if vout.get("value") is not None else None
+                ),
                 "value_commitment": vout.get("valuecommitment"),
                 "scriptpubkey_hex": scriptpubkey_hex,
                 "scriptpubkey_asm": spk.get("asm") if isinstance(spk, dict) else None,
@@ -252,15 +305,32 @@ def normalize_tx(
                 "op_return_data_hex": op_return_data_hex,
                 "is_fee": is_fee,
                 "is_pegout": is_pegout,
-                "pegout_chain_genesis_hash": (vout.get("pegout") or {}).get("genesis_hash") if isinstance(vout.get("pegout"), dict) else None,
-                "pegout_btc_scriptpubkey_hex": (vout.get("pegout") or {}).get("scriptpubkey")
-                if isinstance(vout.get("pegout"), dict)
-                else None,
-                "pegout_value_sat": to_satoshi((vout.get("pegout") or {}).get("value"))
-                if isinstance(vout.get("pegout"), dict) and (vout.get("pegout") or {}).get("value") is not None
-                else None,
-                "pegout_asset_id": (vout.get("pegout") or {}).get("asset") if isinstance(vout.get("pegout"), dict) else None,
-                "pegout_extra_data_hex": (vout.get("pegout") or {}).get("extra_data") if isinstance(vout.get("pegout"), dict) else None,
+                "pegout_chain_genesis_hash": (
+                    (vout.get("pegout") or {}).get("genesis_hash")
+                    if isinstance(vout.get("pegout"), dict)
+                    else None
+                ),
+                "pegout_btc_scriptpubkey_hex": (
+                    (vout.get("pegout") or {}).get("scriptpubkey")
+                    if isinstance(vout.get("pegout"), dict)
+                    else None
+                ),
+                "pegout_value_sat": (
+                    to_satoshi((vout.get("pegout") or {}).get("value"))
+                    if isinstance(vout.get("pegout"), dict)
+                    and (vout.get("pegout") or {}).get("value") is not None
+                    else None
+                ),
+                "pegout_asset_id": (
+                    (vout.get("pegout") or {}).get("asset")
+                    if isinstance(vout.get("pegout"), dict)
+                    else None
+                ),
+                "pegout_extra_data_hex": (
+                    (vout.get("pegout") or {}).get("extra_data")
+                    if isinstance(vout.get("pegout"), dict)
+                    else None
+                ),
                 "nonce": vout.get("nonce"),
                 "surjection_proof": vout.get("surjectionproof"),
                 "rangeproof": vout.get("rangeproof"),

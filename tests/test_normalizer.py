@@ -42,8 +42,18 @@ def test_normalizer_fee_output_and_confidential_detection():
                     }
                 ],
                 "vout": [
-                    {"n": 0, "asset": "assetX", "value": "0.00000100", "scriptPubKey": {"type": "fee", "hex": "", "asm": ""}},
-                    {"n": 1, "assetcommitment": "ac", "valuecommitment": "vc", "scriptPubKey": {"type": "nulldata", "hex": "6a", "asm": "OP_RETURN"}},
+                    {
+                        "n": 0,
+                        "asset": "assetX",
+                        "value": "0.00000100",
+                        "scriptPubKey": {"type": "fee", "hex": "", "asm": ""},
+                    },
+                    {
+                        "n": 1,
+                        "assetcommitment": "ac",
+                        "valuecommitment": "vc",
+                        "scriptPubKey": {"type": "nulldata", "hex": "6a", "asm": "OP_RETURN"},
+                    },
                 ],
             }
         ],
@@ -97,7 +107,11 @@ def test_normalize_tx_pegout_and_op_return_detection():
                 "n": 1,
                 "asset": "assetX",
                 "value": "0.1",
-                "scriptPubKey": {"type": "nulldata", "hex": "6a04deadbeef", "asm": "OP_RETURN deadbeef"},
+                "scriptPubKey": {
+                    "type": "nulldata",
+                    "hex": "6a04deadbeef",
+                    "asm": "OP_RETURN deadbeef",
+                },
             },
         ],
     }
@@ -113,8 +127,24 @@ def test_normalize_tx_pegin_value_and_asset():
     block_row = normalize_block(raw_block, network="liquidv1")
     tx = {
         "txid": "t1",
-        "vin": [{"txid": "p0", "vout": 0, "sequence": 1, "is_pegin": True, "pegin_value": "0.5", "pegin_asset": "assetX"}],
-        "vout": [{"n": 0, "asset": "assetX", "value": "0.1", "scriptPubKey": {"type": "fee", "hex": "", "asm": ""}}],
+        "vin": [
+            {
+                "txid": "p0",
+                "vout": 0,
+                "sequence": 1,
+                "is_pegin": True,
+                "pegin_value": "0.5",
+                "pegin_asset": "assetX",
+            }
+        ],
+        "vout": [
+            {
+                "n": 0,
+                "asset": "assetX",
+                "value": "0.1",
+                "scriptPubKey": {"type": "fee", "hex": "", "asm": ""},
+            }
+        ],
     }
     _, txins, _ = normalize_tx(tx, block_row, tx_index_in_block=0)
     assert txins[0]["is_pegin"] is True
@@ -155,7 +185,11 @@ def test_monkey_normalizer_random_inputs_do_not_crash():
                 vin["prevout"] = {
                     "asset": "assetX",
                     "value": f"0.{rnd.randint(0, 99999999):08d}",
-                    "scriptPubKey": {"type": "witness_v0_keyhash", "hex": "0014", "address": "el1qq"},
+                    "scriptPubKey": {
+                        "type": "witness_v0_keyhash",
+                        "hex": "0014",
+                        "address": "el1qq",
+                    },
                 }
             vins.append(vin)
 
@@ -166,7 +200,11 @@ def test_monkey_normalizer_random_inputs_do_not_crash():
             vout = {
                 "n": n,
                 "asset": "assetX",
-                "scriptPubKey": {"type": rnd.choice(["fee", "nulldata", "witness_v0_keyhash", "pegout"]), "hex": hex_script, "asm": ""},
+                "scriptPubKey": {
+                    "type": rnd.choice(["fee", "nulldata", "witness_v0_keyhash", "pegout"]),
+                    "hex": hex_script,
+                    "asm": "",
+                },
             }
             if is_conf:
                 vout["value"] = None
@@ -175,7 +213,12 @@ def test_monkey_normalizer_random_inputs_do_not_crash():
             else:
                 vout["value"] = f"0.{rnd.randint(0, 99999999):08d}"
             if rnd.random() < 0.1:
-                vout["pegout"] = {"genesis_hash": "00", "scriptpubkey": "51", "value": "0.0001", "asset": "assetX"}
+                vout["pegout"] = {
+                    "genesis_hash": "00",
+                    "scriptpubkey": "51",
+                    "value": "0.0001",
+                    "asset": "assetX",
+                }
             vouts.append(vout)
 
         tx = {

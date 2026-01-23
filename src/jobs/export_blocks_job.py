@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from ..service import LiquidService
 from ..utils.io import append_ndjson
 

@@ -1,5 +1,4 @@
 import pytest
-
 from liquidetl.cli import build_parser
 
 
@@ -43,4 +42,3 @@ def test_parser_ingest_range_defaults_and_progress_mutex():
                 "--no-progress",
             ]
         )
-

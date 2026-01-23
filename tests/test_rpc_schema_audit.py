@@ -8,8 +8,21 @@ def test_audit_rpc_blocks_counts_keys():
             "signblock_witness_hex": "bb",
             "tx": [
                 {
-                    "vin": [{"is_pegin": True, "prevout": {"value": "<confidential>"}, "txinwitness": ["00"]}],
-                    "vout": [{"value": "<confidential>", "asset": "asset", "valuecommitment": "vc", "surjectionproof": "sp"}],
+                    "vin": [
+                        {
+                            "is_pegin": True,
+                            "prevout": {"value": "<confidential>"},
+                            "txinwitness": ["00"],
+                        }
+                    ],
+                    "vout": [
+                        {
+                            "value": "<confidential>",
+                            "asset": "asset",
+                            "valuecommitment": "vc",
+                            "surjectionproof": "sp",
+                        }
+                    ],
                 }
             ],
         }

@@ -87,7 +87,15 @@ def test_migrate_renames_legacy_tables(monkeypatch):
 
 
 def test_migrate_renames_v2_tables(monkeypatch):
-    state = {"tables": {"blocks_v2": {"height"}, "transactions_v2": {"txid"}, "txins_v2": {"txid"}, "txouts_v2": {"txid"}}, "renames": []}
+    state = {
+        "tables": {
+            "blocks_v2": {"height"},
+            "transactions_v2": {"txid"},
+            "txins_v2": {"txid"},
+            "txouts_v2": {"txid"},
+        },
+        "renames": [],
+    }
     _install_fake_psycopg(monkeypatch, state)
     pg_mod.PostgresWriter("postgresql://x")
     assert ("blocks_v2", "blocks") in state["renames"]
@@ -104,7 +112,15 @@ def test_migrate_does_not_rename_when_targets_exist(monkeypatch):
 
 
 def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
-    state = {"tables": {"blocks": {"height"}, "transactions": {"txid"}, "txins": {"txid"}, "txouts": {"txid"}}, "renames": []}
+    state = {
+        "tables": {
+            "blocks": {"height"},
+            "transactions": {"txid"},
+            "txins": {"txid"},
+            "txouts": {"txid"},
+        },
+        "renames": [],
+    }
     _install_fake_psycopg(monkeypatch, state)
     w = pg_mod.PostgresWriter("postgresql://x")
 
@@ -168,7 +184,15 @@ def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
 
 
 def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
-    state = {"tables": {"blocks": {"height"}, "transactions": {"txid"}, "txins": {"txid"}, "txouts": {"txid"}}, "renames": []}
+    state = {
+        "tables": {
+            "blocks": {"height"},
+            "transactions": {"txid"},
+            "txins": {"txid"},
+            "txouts": {"txid"},
+        },
+        "renames": [],
+    }
     _install_fake_psycopg(monkeypatch, state)
     w = pg_mod.PostgresWriter("postgresql://x")
 

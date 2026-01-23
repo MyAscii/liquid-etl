@@ -20,7 +20,9 @@ class FakeSession:
         payload = json.loads(data)
         # Single call
         if isinstance(payload, dict):
-            return FakeResp(json.dumps({"jsonrpc": "2.0", "id": payload["id"], "result": {"amount": 1.23}}))
+            return FakeResp(
+                json.dumps({"jsonrpc": "2.0", "id": payload["id"], "result": {"amount": 1.23}})
+            )
         # Batch call
         results = []
         for item in payload:
@@ -34,7 +36,7 @@ def test_call_parses_decimal(monkeypatch):
     r = rpc_mod.LiquidRpc("http://user:pass@localhost:7041")
     res = r.call("getblockcount")
     # Ensure Decimal parsing occurred inside JSON loader by checking type
-    assert isinstance(r._decode(json.dumps({"a": 1.23}))['a'], Decimal)
+    assert isinstance(r._decode(json.dumps({"a": 1.23}))["a"], Decimal)
     assert res["amount"] == Decimal("1.23")
 
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
+from typing import Any
 
 from ..service import LiquidService
 
@@ -17,9 +17,10 @@ class EnrichTransactionsJob:
         raise TypeError(f"Type not serializable: {type(obj)}")
 
     def run(self) -> None:
-        with open(self.transactions_input, "r", encoding="utf-8") as fin, open(
-            self.transactions_output, "w", encoding="utf-8"
-        ) as fout:
+        with (
+            open(self.transactions_input, "r", encoding="utf-8") as fin,
+            open(self.transactions_output, "w", encoding="utf-8") as fout,
+        ):
             for line in fin:
                 if not line.strip():
                     continue
@@ -36,7 +37,9 @@ class EnrichTransactionsJob:
                         if vout_index < len(vouts):
                             pv = vouts[vout_index]
                             spk = pv.get("scriptPubKey", {})
-                            addrs = spk.get("addresses") or (spk.get("address") and [spk.get("address")])
+                            addrs = spk.get("addresses") or (
+                                spk.get("address") and [spk.get("address")]
+                            )
                             vin["addresses"] = addrs
                             vin["required_signatures"] = spk.get("reqSigs")
                             vin["type"] = spk.get("type")

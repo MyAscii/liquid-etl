@@ -1,8 +1,7 @@
-import pytest
-
 import liquidetl.cli as cli_mod
 import liquidetl.rpc as rpc_mod
 import liquidetl.utils.postgres_writer as pg_mod
+import pytest
 
 
 @pytest.mark.smoke

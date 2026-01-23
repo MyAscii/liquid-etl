@@ -7,7 +7,11 @@ import pytest
 
 @pytest.mark.e2e
 @pytest.mark.skipif(
-    not (os.environ.get("LIQUID_E2E") and os.environ.get("LIQUID_RPC_URI") and os.environ.get("LIQUID_DSN")),
+    not (
+        os.environ.get("LIQUID_E2E")
+        and os.environ.get("LIQUID_RPC_URI")
+        and os.environ.get("LIQUID_DSN")
+    ),
     reason="Set LIQUID_E2E=1, LIQUID_RPC_URI, and LIQUID_DSN to run E2E tests",
 )
 def test_e2e_ingest_range_to_postgres_writes_block():
@@ -51,4 +55,3 @@ def test_e2e_ingest_range_to_postgres_writes_block():
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(1) FROM blocks WHERE height=%s", (start,))
             assert cur.fetchone()[0] >= 1
-

@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 from ..service import LiquidService
-from .export_blocks_job import ExportBlocksJob
 from .enrich_transactions_job import EnrichTransactionsJob
+from .export_blocks_job import ExportBlocksJob
 
 
 def _mkdir(p: Path):
@@ -42,8 +41,10 @@ def export_all(
         ranges = list(_batch_ranges(s, e, batch_size))
     else:
         if start_block is None or end_block is None:
-            raise ValueError("When date is not provided, both start_block and end_block are required")
-        base = chain_dir / f"blocks"
+            raise ValueError(
+                "When date is not provided, both start_block and end_block are required"
+            )
+        base = chain_dir / "blocks"
         _mkdir(base)
         ranges = list(_batch_ranges(start_block, end_block, batch_size))
 

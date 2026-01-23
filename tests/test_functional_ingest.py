@@ -1,8 +1,7 @@
-import pytest
-
 import liquidetl.cli as cli_mod
 import liquidetl.rpc as rpc_mod
 import liquidetl.utils.postgres_writer as pg_mod
+import pytest
 
 
 @pytest.mark.functional
@@ -47,7 +46,14 @@ def test_ingest_range_builds_expected_rows(monkeypatch):
                                     "discountvsize": 90.0,
                                     "discountweight": 360,
                                     "fee": {"assetX": "0.00000100"},
-                                    "vin": [{"txid": "p0", "vout": 0, "sequence": 1, "scriptSig": {"hex": "00", "asm": ""}}],
+                                    "vin": [
+                                        {
+                                            "txid": "p0",
+                                            "vout": 0,
+                                            "sequence": 1,
+                                            "scriptSig": {"hex": "00", "asm": ""},
+                                        }
+                                    ],
                                     "vout": [
                                         {
                                             "n": 0,
@@ -104,4 +110,3 @@ def test_ingest_range_builds_expected_rows(monkeypatch):
     assert len(captured["txs"]) == 2
     assert len(captured["ins"]) == 2
     assert len(captured["outs"]) == 2
-

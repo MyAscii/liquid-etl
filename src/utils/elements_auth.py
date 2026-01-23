@@ -56,4 +56,3 @@ def resolve_rpc_auth(datadir: str) -> Optional[Tuple[str, str]]:
         return user, pwd
 
     return None
-

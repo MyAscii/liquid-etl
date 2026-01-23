@@ -30,4 +30,3 @@ def test_get_blocks_by_numbers_batches_calls():
     assert len(rpc.calls) == 2
     assert [m for (m, _) in rpc.calls[0]] == ["getblockhash", "getblockhash", "getblockhash"]
     assert [m for (m, _) in rpc.calls[1]] == ["getblock", "getblock", "getblock"]
-

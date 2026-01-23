@@ -2,14 +2,16 @@ import os
 import sqlite3
 
 import pytest
-
 from liquidetl.rpc import LiquidRpc
-from liquidetl.service import LiquidService
 from liquidetl.schema import BLOCK_SCHEMA_KEYS, TRANSACTION_SCHEMA_KEYS
+from liquidetl.service import LiquidService
 from liquidetl.utils.sqlite_writer import SQLiteWriter
 
 
-@pytest.mark.skipif(not os.environ.get("LIQUID_RPC_URI"), reason="Set LIQUID_RPC_URI to run real RPC integration tests")
+@pytest.mark.skipif(
+    not os.environ.get("LIQUID_RPC_URI"),
+    reason="Set LIQUID_RPC_URI to run real RPC integration tests",
+)
 def test_real_rpc_normalization_and_sqlite_write(tmp_path):
     uri = os.environ["LIQUID_RPC_URI"]
     rpc = LiquidRpc(uri)

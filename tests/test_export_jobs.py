@@ -1,5 +1,3 @@
-import json
-
 from liquidetl.jobs.export_blocks_job import ExportBlocksJob
 from liquidetl.service import BlockWithTxs
 

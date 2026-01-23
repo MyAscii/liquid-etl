@@ -26,7 +26,9 @@ class LiquidService:
         h = self.rpc.getblockhash(height)
         b = self.rpc.getblock(h, verbosity=3)
         block_item = self._normalize_block(b)
-        tx_items = [self._normalize_tx(t, block_item, tx_index=i) for i, t in enumerate(b.get("tx", []))]
+        tx_items = [
+            self._normalize_tx(t, block_item, tx_index=i) for i, t in enumerate(b.get("tx", []))
+        ]
         return BlockWithTxs(block=block_item, transactions=tx_items)
 
     def get_blocks_by_numbers(self, heights: List[int]) -> List[BlockWithTxs]:
@@ -37,21 +39,27 @@ class LiquidService:
         bundles: List[BlockWithTxs] = []
         for b in blocks:
             block_item = self._normalize_block(b)
-            tx_items = [self._normalize_tx(t, block_item, tx_index=i) for i, t in enumerate(b.get("tx", []))]
+            tx_items = [
+                self._normalize_tx(t, block_item, tx_index=i) for i, t in enumerate(b.get("tx", []))
+            ]
             bundles.append(BlockWithTxs(block=block_item, transactions=tx_items))
         return bundles
 
     def get_head_height(self) -> int:
         return self.rpc.getblockcount()
 
-    def get_block_range_for_date(self, date_str: str, start_hour: int = 0, end_hour: int = 24) -> Tuple[int, int]:
+    def get_block_range_for_date(
+        self, date_str: str, start_hour: int = 0, end_hour: int = 24
+    ) -> Tuple[int, int]:
         """Approximate [start, end] height range that covers the UTC date window.
 
         Uses binary search over heights to find first block with time >= start,
         and last block with time < end. Block timestamps are not strictly
         monotonic, so slight drift outside the window can occur.
         """
-        dt_start = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=start_hour, tzinfo=timezone.utc)
+        dt_start = datetime.strptime(date_str, "%Y-%m-%d").replace(
+            hour=start_hour, tzinfo=timezone.utc
+        )
         dt_end = datetime.strptime(date_str, "%Y-%m-%d").replace(hour=end_hour, tzinfo=timezone.utc)
         start_ts = int(dt_start.timestamp())
         end_ts = int(dt_end.timestamp())
@@ -120,12 +128,16 @@ class LiquidService:
             "txids": txids,
         }
 
-    def _normalize_address_info(self, spk: Dict[str, Any]) -> Tuple[Optional[List[str]], Optional[int]]:
+    def _normalize_address_info(
+        self, spk: Dict[str, Any]
+    ) -> Tuple[Optional[List[str]], Optional[int]]:
         addrs = spk.get("addresses") or (spk.get("address") and [spk.get("address")])
         req_sigs = spk.get("reqSigs")
         return addrs, req_sigs
 
-    def _normalize_tx(self, t: Dict[str, Any], block_item: Dict[str, Any], tx_index: Optional[int] = None) -> Dict[str, Any]:
+    def _normalize_tx(
+        self, t: Dict[str, Any], block_item: Dict[str, Any], tx_index: Optional[int] = None
+    ) -> Dict[str, Any]:
         is_coinbase = any("coinbase" in vin for vin in t.get("vin", []))
         inputs = []
         input_value_total: Optional[Decimal] = None
@@ -187,7 +199,11 @@ class LiquidService:
             }
             prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
             if prevout:
-                spk = prevout.get("scriptPubKey", {}) if isinstance(prevout.get("scriptPubKey"), dict) else {}
+                spk = (
+                    prevout.get("scriptPubKey", {})
+                    if isinstance(prevout.get("scriptPubKey"), dict)
+                    else {}
+                )
                 addrs, req_sigs = self._normalize_address_info(spk)
                 item["addresses"] = addrs
                 item["required_signatures"] = req_sigs
@@ -217,14 +233,22 @@ class LiquidService:
                 or vout.get("pegout_chain")
                 or (isinstance(spk, dict) and (spk.get("pegout") or spk.get("type") == "pegout"))
             )
-            is_fee = bool(vout.get("is_fee") or (isinstance(spk, dict) and spk.get("type") == "fee"))
+            is_fee = bool(
+                vout.get("is_fee") or (isinstance(spk, dict) and spk.get("type") == "fee")
+            )
             # Assign type with pegout priority, then confidential
-            otype = "pegout" if is_pegout else ("fee" if is_fee else ("confidential" if is_confidential else None))
+            otype = (
+                "pegout"
+                if is_pegout
+                else ("fee" if is_fee else ("confidential" if is_confidential else None))
+            )
             if is_confidential:
                 confidential_present = True
             else:
                 try:
-                    output_value_total = (output_value_total or Decimal(0)) + (Decimal(str(value)) if value is not None else Decimal(0))
+                    output_value_total = (output_value_total or Decimal(0)) + (
+                        Decimal(str(value)) if value is not None else Decimal(0)
+                    )
                 except Exception:
                     pass
 
@@ -262,7 +286,9 @@ class LiquidService:
         if not confidential_present:
             try:
                 if input_value_total is not None and output_value_total is not None:
-                    fee = str((input_value_total or Decimal(0)) - (output_value_total or Decimal(0)))
+                    fee = str(
+                        (input_value_total or Decimal(0)) - (output_value_total or Decimal(0))
+                    )
             except Exception:
                 fee = None
 

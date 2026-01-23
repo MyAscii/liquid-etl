@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, List, Optional
 
 
 @dataclass(frozen=True)
@@ -177,12 +177,29 @@ def suggest_prunable_postgres_columns(audit: RpcSchemaAudit) -> Dict[str, List[s
                 candidates["blocks"].append(k)
 
     if audit.sampled_vouts > 0:
-        for k in ("nonce", "rangeproof", "pegout", "is_pegout", "spent", "spentby", "spentbyvin", "spentheight"):
+        for k in (
+            "nonce",
+            "rangeproof",
+            "pegout",
+            "is_pegout",
+            "spent",
+            "spentby",
+            "spentbyvin",
+            "spentheight",
+        ):
             if audit.vout_key_hits.get(k, 0) == 0:
                 candidates["txouts"].append(k)
 
     if audit.sampled_vins > 0:
-        for k in ("pegin_value", "pegin_asset", "pegin_genesis_hash", "pegin_claim_script", "pegin_tx", "pegin_txout_proof", "pegin_blockhash"):
+        for k in (
+            "pegin_value",
+            "pegin_asset",
+            "pegin_genesis_hash",
+            "pegin_claim_script",
+            "pegin_tx",
+            "pegin_txout_proof",
+            "pegin_blockhash",
+        ):
             if audit.vin_key_hits.get(k, 0) == 0:
                 candidates["txins"].append(k)
 

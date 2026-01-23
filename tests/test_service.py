@@ -1,6 +1,4 @@
-from decimal import Decimal
-
-from liquidetl.service import LiquidService, BlockWithTxs
+from liquidetl.service import BlockWithTxs, LiquidService
 
 
 class StubRpc:
@@ -79,7 +77,13 @@ class StubRpc:
                             "nonce": "02",
                             "surjectionproof": "sp",
                             "rangeproof": "rp",
-                            "pegout": {"genesis_hash": "00", "scriptpubkey": "0014", "value": "0.0001", "asset": "assetid", "extra_data": "ee"},
+                            "pegout": {
+                                "genesis_hash": "00",
+                                "scriptpubkey": "0014",
+                                "value": "0.0001",
+                                "asset": "assetid",
+                                "extra_data": "ee",
+                            },
                             "scriptPubKey": {"address": "el1abc", "type": "pegout", "hex": "0014"},
                         }
                     ],
@@ -95,7 +99,21 @@ def test_get_block_by_number_normalizes():
     s = LiquidService(StubRpc())
     bundle = s.get_block_by_number(0)
     b = bundle.block
-    assert set(["hash", "size", "stripped_size", "weight", "number", "version", "merkle_root", "timestamp", "nonce", "bits", "transaction_count"]).issubset(b.keys())
+    assert set(
+        [
+            "hash",
+            "size",
+            "stripped_size",
+            "weight",
+            "number",
+            "version",
+            "merkle_root",
+            "timestamp",
+            "nonce",
+            "bits",
+            "transaction_count",
+        ]
+    ).issubset(b.keys())
     # Transactions have outputs and fee None when inputs not enriched
     t1 = bundle.transactions[0]
     assert t1["outputs"][0]["value"] == 0.1234
@@ -111,10 +129,18 @@ def test_get_block_by_number_normalizes():
 
 def test_get_block_range_for_date_binary_search(monkeypatch):
     s = LiquidService(StubRpc())
+
     # Patch methods to control timestamps
     def fake_get_block_by_number(height: int):
         # Every minute starting from start
-        return BlockWithTxs(block={"timestamp": 1_600_000_000 + height * 60, "hash": f"h{height}", "number": height}, transactions=[])
+        return BlockWithTxs(
+            block={
+                "timestamp": 1_600_000_000 + height * 60,
+                "hash": f"h{height}",
+                "number": height,
+            },
+            transactions=[],
+        )
 
     monkeypatch.setattr(s, "get_block_by_number", fake_get_block_by_number)
     monkeypatch.setattr(s, "get_head_height", lambda: 100)

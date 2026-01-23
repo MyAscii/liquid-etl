@@ -45,8 +45,15 @@ class LiquidRpc:
 
     def call(self, method: str, params: Optional[List[Any]] = None) -> Any:
         self._request_id += 1
-        payload = {"jsonrpc": "2.0", "id": self._request_id, "method": method, "params": params or []}
-        resp = self._session.post(self._url, headers=self._headers, data=json.dumps(payload), timeout=self._timeout)
+        payload = {
+            "jsonrpc": "2.0",
+            "id": self._request_id,
+            "method": method,
+            "params": params or [],
+        }
+        resp = self._session.post(
+            self._url, headers=self._headers, data=json.dumps(payload), timeout=self._timeout
+        )
         resp.raise_for_status()
         data = self._decode(resp.text)
         if "error" in data and data["error"]:
@@ -57,8 +64,12 @@ class LiquidRpc:
         batch = []
         for method, params in calls:
             self._request_id += 1
-            batch.append({"jsonrpc": "2.0", "id": self._request_id, "method": method, "params": params or []})
-        resp = self._session.post(self._url, headers=self._headers, data=json.dumps(batch), timeout=self._timeout)
+            batch.append(
+                {"jsonrpc": "2.0", "id": self._request_id, "method": method, "params": params or []}
+            )
+        resp = self._session.post(
+            self._url, headers=self._headers, data=json.dumps(batch), timeout=self._timeout
+        )
         resp.raise_for_status()
         results = self._decode(resp.text)
         # Map by id to keep ordering consistent

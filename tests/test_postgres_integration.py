@@ -4,7 +4,9 @@ import pytest
 
 
 @pytest.mark.integration
-@pytest.mark.skipif(not os.environ.get("LIQUID_DSN"), reason="Set LIQUID_DSN to run Postgres integration tests")
+@pytest.mark.skipif(
+    not os.environ.get("LIQUID_DSN"), reason="Set LIQUID_DSN to run Postgres integration tests"
+)
 def test_postgres_writer_writes_rows():
     try:
         import psycopg
@@ -78,9 +80,15 @@ def test_postgres_writer_writes_rows():
             assert cur.fetchone()[0] >= 1
             cur.execute("SELECT COUNT(1) FROM txouts WHERE txid=%s", ("it_txid",))
             assert cur.fetchone()[0] >= 1
-            cur.execute("SELECT COUNT(1) FROM txins WHERE txid=%s AND issuance_amount IS NOT NULL", ("it_txid",))
+            cur.execute(
+                "SELECT COUNT(1) FROM txins WHERE txid=%s AND issuance_amount IS NOT NULL",
+                ("it_txid",),
+            )
             assert cur.fetchone()[0] >= 1
-            cur.execute("SELECT COUNT(1) FROM transactions WHERE txid=%s AND explicit_in_by_asset IS NOT NULL", ("it_txid",))
+            cur.execute(
+                "SELECT COUNT(1) FROM transactions WHERE txid=%s AND explicit_in_by_asset IS NOT NULL",
+                ("it_txid",),
+            )
             assert cur.fetchone()[0] == 1
 
         with conn.cursor() as cur:

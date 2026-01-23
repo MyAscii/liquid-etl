@@ -1,12 +1,13 @@
 import pytest
-
-from liquidetl.service import LiquidService, BlockWithTxs
+from liquidetl.service import BlockWithTxs, LiquidService
 from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
 
 
 class StubService(LiquidService):
     def __init__(self):
-        class _R: pass
+        class _R:
+            pass
+
         super().__init__(_R())
 
     def get_head_height(self):
@@ -23,7 +24,9 @@ def test_postgres_output_requires_optional_dependency():
         __import__("psycopg")
     except Exception:
         with pytest.raises(RuntimeError) as e:
-            LiquidStreamerAdapter(service=StubService(), output="postgresql://user:pass@localhost:5432/liquidetl")
+            LiquidStreamerAdapter(
+                service=StubService(), output="postgresql://user:pass@localhost:5432/liquidetl"
+            )
         assert "psycopg not installed" in str(e.value)
     else:
         pytest.skip("psycopg installed; skipping optional-dependency assertion")

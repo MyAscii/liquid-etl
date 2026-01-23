@@ -33,4 +33,3 @@ def test_resolve_rpc_auth_ignores_invalid_cookie(tmp_path):
     dd = tmp_path / "elements"
     _write(dd / ".cookie", "missing_colon\n")
     assert resolve_rpc_auth(str(dd)) is None
-

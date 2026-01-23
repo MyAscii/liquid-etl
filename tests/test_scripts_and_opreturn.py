@@ -4,9 +4,9 @@ from liquidetl.utils.script_parsing import extract_op_return_data_hex
 
 def test_extract_op_return_data_hex():
     assert extract_op_return_data_hex("6a") == ""
-    assert extract_op_return_data_hex("6a24aa21a9ed94f15ed3a62165e4a0b99699cc28b48e19cb5bc1b1f47155db62d63f1e047d45") == (
-        "aa21a9ed94f15ed3a62165e4a0b99699cc28b48e19cb5bc1b1f47155db62d63f1e047d45"
-    )
+    assert extract_op_return_data_hex(
+        "6a24aa21a9ed94f15ed3a62165e4a0b99699cc28b48e19cb5bc1b1f47155db62d63f1e047d45"
+    ) == ("aa21a9ed94f15ed3a62165e4a0b99699cc28b48e19cb5bc1b1f47155db62d63f1e047d45")
 
 
 def test_normalize_coinbase_scriptsig_and_witness():

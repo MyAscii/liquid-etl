@@ -1,4 +1,4 @@
-from liquidetl.service import LiquidService, BlockWithTxs
+from liquidetl.service import LiquidService
 
 
 class StubRpc:
@@ -16,7 +16,13 @@ class StubRpc:
                     "vin": [
                         {"txid": "a", "vout": 0, "is_pegin": True, "sequence": 0},
                         {"txid": "b", "vout": 1, "issuance": {"asset": "asset"}, "sequence": 0},
-                        {"txid": "c", "vout": 2, "is_pegin": True, "issuance": {"asset": "asset2"}, "sequence": 0},
+                        {
+                            "txid": "c",
+                            "vout": 2,
+                            "is_pegin": True,
+                            "issuance": {"asset": "asset2"},
+                            "sequence": 0,
+                        },
                     ],
                     "vout": [
                         {

@@ -12,7 +12,9 @@ class PostgresWriter:
         try:
             import psycopg
         except Exception as e:
-            raise RuntimeError("psycopg not installed; install with pip install -e .[postgres]") from e
+            raise RuntimeError(
+                "psycopg not installed; install with pip install -e .[postgres]"
+            ) from e
         self.conn = psycopg.connect(dsn, autocommit=True)
         self._ensure_schema()
 
@@ -22,8 +24,7 @@ class PostgresWriter:
     def _ensure_schema(self) -> None:
         with self.conn.cursor() as cur:
             self._migrate_tables(cur)
-            cur.execute(
-                """
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS blocks (
                     hash TEXT PRIMARY KEY,
                     height BIGINT,
@@ -40,10 +41,8 @@ class PostgresWriter:
                     signblock_solution_hex TEXT,
                     txids JSONB
                 )
-                """
-            )
-            cur.execute(
-                """
+                """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS transactions (
                     txid TEXT PRIMARY KEY,
                     wtxid TEXT,
@@ -70,10 +69,8 @@ class PostgresWriter:
                     has_pegin BOOLEAN,
                     has_issuance BOOLEAN
                 )
-                """
-            )
-            cur.execute(
-                """
+                """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS txins (
                     txid TEXT NOT NULL,
                     vin INTEGER NOT NULL,
@@ -96,10 +93,8 @@ class PostgresWriter:
                     prevout_address TEXT,
                     PRIMARY KEY (txid, vin)
                 )
-                """
-            )
-            cur.execute(
-                """
+                """)
+            cur.execute("""
                 CREATE TABLE IF NOT EXISTS txouts (
                     txid TEXT NOT NULL,
                     vout INTEGER NOT NULL,
@@ -117,10 +112,13 @@ class PostgresWriter:
                     surjection_proof TEXT,
                     PRIMARY KEY (txid, vout)
                 )
-                """
+                """)
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS transactions_block_height_idx ON transactions (block_height)"
             )
-            cur.execute("CREATE INDEX IF NOT EXISTS transactions_block_height_idx ON transactions (block_height)")
-            cur.execute("CREATE INDEX IF NOT EXISTS txins_prev_outpoint_idx ON txins (prev_txid, prev_vout)")
+            cur.execute(
+                "CREATE INDEX IF NOT EXISTS txins_prev_outpoint_idx ON txins (prev_txid, prev_vout)"
+            )
             cur.execute("CREATE INDEX IF NOT EXISTS txouts_asset_id_idx ON txouts (asset_id)")
             cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS network")
             cur.execute("ALTER TABLE blocks DROP COLUMN IF EXISTS nonce")
@@ -143,7 +141,9 @@ class PostgresWriter:
             cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_merkle_proof_hex")
             cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS pegin_referenced_block_hash")
             cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS issuance_amount_commitment")
-            cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS issuance_inflation_keys_commitment")
+            cur.execute(
+                "ALTER TABLE txins DROP COLUMN IF EXISTS issuance_inflation_keys_commitment"
+            )
             cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_asset_id")
             cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_value_sat")
             cur.execute("ALTER TABLE txins DROP COLUMN IF EXISTS prevout_value_commitment")
@@ -194,8 +194,12 @@ class PostgresWriter:
             return None
 
     def _migrate_tables(self, cur: Any) -> None:
-        legacy_blocks = self._table_exists(cur, "blocks") and self._table_has_column(cur, "blocks", "number")
-        legacy_transactions = self._table_exists(cur, "transactions") and self._table_has_column(cur, "transactions", "tx_index")
+        legacy_blocks = self._table_exists(cur, "blocks") and self._table_has_column(
+            cur, "blocks", "number"
+        )
+        legacy_transactions = self._table_exists(cur, "transactions") and self._table_has_column(
+            cur, "transactions", "tx_index"
+        )
 
         if legacy_blocks and not self._table_exists(cur, "blocks_legacy"):
             self._rename_table(cur, "blocks", "blocks_legacy")
@@ -204,7 +208,9 @@ class PostgresWriter:
 
         if self._table_exists(cur, "blocks_v2") and not self._table_exists(cur, "blocks"):
             self._rename_table(cur, "blocks_v2", "blocks")
-        if self._table_exists(cur, "transactions_v2") and not self._table_exists(cur, "transactions"):
+        if self._table_exists(cur, "transactions_v2") and not self._table_exists(
+            cur, "transactions"
+        ):
             self._rename_table(cur, "transactions_v2", "transactions")
         if self._table_exists(cur, "txins_v2") and not self._table_exists(cur, "txins"):
             self._rename_table(cur, "txins_v2", "txins")
@@ -280,16 +286,24 @@ class PostgresWriter:
             "txids": txids,
         }
 
-    def _coerce_tx_rows(self, tx: Dict[str, Any]) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
+    def _coerce_tx_rows(
+        self, tx: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]], List[Dict[str, Any]]]:
         if "vin" in tx and "vout" in tx:
-            raise ValueError("write_transaction expects normalized transaction items; use ingest_range_to_postgres for raw blocks")
+            raise ValueError(
+                "write_transaction expects normalized transaction items; use ingest_range_to_postgres for raw blocks"
+            )
 
         inputs = tx.get("inputs", []) or []
         outputs = tx.get("outputs", []) or []
 
-        has_any_confidential = any(isinstance(o, dict) and o.get("confidential_value") for o in outputs)
+        has_any_confidential = any(
+            isinstance(o, dict) and o.get("confidential_value") for o in outputs
+        )
         has_pegin = any(isinstance(i, dict) and i.get("input_type") == "pegin" for i in inputs)
-        has_issuance = any(isinstance(i, dict) and i.get("input_type") == "issuance" for i in inputs)
+        has_issuance = any(
+            isinstance(i, dict) and i.get("input_type") == "issuance" for i in inputs
+        )
 
         fee_by_asset = None
         node_fee = tx.get("node_fee")
@@ -349,8 +363,12 @@ class PostgresWriter:
             "weight": tx.get("weight"),
             "discount_vsize": tx.get("discount_virtual_size"),
             "discount_weight": tx.get("discount_weight"),
-            "vin_count": tx.get("input_count") if tx.get("input_count") is not None else len(inputs),
-            "vout_count": tx.get("output_count") if tx.get("output_count") is not None else len(outputs),
+            "vin_count": (
+                tx.get("input_count") if tx.get("input_count") is not None else len(inputs)
+            ),
+            "vout_count": (
+                tx.get("output_count") if tx.get("output_count") is not None else len(outputs)
+            ),
             "fee_by_asset": fee_by_asset,
             "explicit_in_by_asset": explicit_in_by_asset,
             "explicit_out_by_asset": explicit_out_by_asset,
@@ -376,10 +394,22 @@ class PostgresWriter:
             issuance_amount_sat = None
             issuance_inflation_keys_sat = None
             if issuance:
-                issuance_asset_blinding_nonce = issuance.get("assetBlindingNonce") or issuance.get("assetblindingnonce")
-                issuance_asset_entropy = issuance.get("assetEntropy") or issuance.get("assetentropy")
-                issuance_amount_sat = to_satoshi(issuance.get("assetamount")) if issuance.get("assetamount") is not None else None
-                issuance_inflation_keys_sat = to_satoshi(issuance.get("tokenamount")) if issuance.get("tokenamount") is not None else None
+                issuance_asset_blinding_nonce = issuance.get("assetBlindingNonce") or issuance.get(
+                    "assetblindingnonce"
+                )
+                issuance_asset_entropy = issuance.get("assetEntropy") or issuance.get(
+                    "assetentropy"
+                )
+                issuance_amount_sat = (
+                    to_satoshi(issuance.get("assetamount"))
+                    if issuance.get("assetamount") is not None
+                    else None
+                )
+                issuance_inflation_keys_sat = (
+                    to_satoshi(issuance.get("tokenamount"))
+                    if issuance.get("tokenamount") is not None
+                    else None
+                )
 
             txins.append(
                 {
@@ -443,7 +473,11 @@ class PostgresWriter:
             payloads.append(
                 {
                     **b,
-                    "txids": json.dumps(b.get("txids"), default=str) if b.get("txids") is not None else None,
+                    "txids": (
+                        json.dumps(b.get("txids"), default=str)
+                        if b.get("txids") is not None
+                        else None
+                    ),
                 }
             )
         if not payloads:
@@ -488,9 +522,21 @@ class PostgresWriter:
             payloads.append(
                 {
                     **t,
-                    "fee_by_asset": json.dumps(t.get("fee_by_asset"), default=str) if t.get("fee_by_asset") is not None else None,
-                    "explicit_in_by_asset": json.dumps(t.get("explicit_in_by_asset"), default=str) if t.get("explicit_in_by_asset") is not None else None,
-                    "explicit_out_by_asset": json.dumps(t.get("explicit_out_by_asset"), default=str) if t.get("explicit_out_by_asset") is not None else None,
+                    "fee_by_asset": (
+                        json.dumps(t.get("fee_by_asset"), default=str)
+                        if t.get("fee_by_asset") is not None
+                        else None
+                    ),
+                    "explicit_in_by_asset": (
+                        json.dumps(t.get("explicit_in_by_asset"), default=str)
+                        if t.get("explicit_in_by_asset") is not None
+                        else None
+                    ),
+                    "explicit_out_by_asset": (
+                        json.dumps(t.get("explicit_out_by_asset"), default=str)
+                        if t.get("explicit_out_by_asset") is not None
+                        else None
+                    ),
                 }
             )
         if not payloads:
@@ -547,8 +593,16 @@ class PostgresWriter:
             payloads.append(
                 {
                     **i,
-                    "txinwitness": json.dumps(i.get("txinwitness"), default=str) if i.get("txinwitness") is not None else None,
-                    "pegin_witness": json.dumps(i.get("pegin_witness"), default=str) if i.get("pegin_witness") is not None else None,
+                    "txinwitness": (
+                        json.dumps(i.get("txinwitness"), default=str)
+                        if i.get("txinwitness") is not None
+                        else None
+                    ),
+                    "pegin_witness": (
+                        json.dumps(i.get("pegin_witness"), default=str)
+                        if i.get("pegin_witness") is not None
+                        else None
+                    ),
                 }
             )
         if not payloads:

@@ -8,7 +8,11 @@ class StubRpc:
     def getrawtransaction(self, txid: str, verbose: bool = True):
         return {
             "vout": [
-                {"value": 0.5, "asset": "assetid", "scriptPubKey": {"addresses": ["el1x"], "reqSigs": 1}},
+                {
+                    "value": 0.5,
+                    "asset": "assetid",
+                    "scriptPubKey": {"addresses": ["el1x"], "reqSigs": 1},
+                },
                 {"value": 1.0, "asset": "assetid2", "scriptPubKey": {"address": "el1y"}},
             ]
         }

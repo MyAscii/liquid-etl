@@ -1,14 +1,16 @@
 import json
 import sqlite3
 
-from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
-from liquidetl.service import LiquidService, BlockWithTxs
 from liquidetl.cli import main as cli_main
+from liquidetl.service import BlockWithTxs, LiquidService
+from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
 
 
 class StubService(LiquidService):
     def __init__(self):
-        class _R: pass
+        class _R:
+            pass
+
         super().__init__(_R())
 
     def get_head_height(self):
@@ -23,7 +25,9 @@ class StubService(LiquidService):
 def test_stream_writes_to_sqlite(monkeypatch, tmp_path):
     db_path = tmp_path / "local.db"
     s = StubService()
-    adapter = LiquidStreamerAdapter(service=s, output=f"sqlite://{db_path.as_posix()}", batch_size=1)
+    adapter = LiquidStreamerAdapter(
+        service=s, output=f"sqlite://{db_path.as_posix()}", batch_size=1
+    )
 
     def raise_kbi(seconds):
         raise KeyboardInterrupt
@@ -55,17 +59,32 @@ def test_cli_load_ndjson_into_sqlite(tmp_path):
     with open(blocks_path, "w", encoding="utf-8") as bf:
         bf.write(json.dumps({"hash": "h1", "number": 1, "timestamp": 12345}) + "\n")
     with open(tx_path, "w", encoding="utf-8") as tf:
-        tf.write(json.dumps({
-            "hash": "t1", "index": 0, "block_hash": "h1", "block_number": 1, "block_timestamp": 12345,
-            "inputs": [], "outputs": []
-        }) + "\n")
+        tf.write(
+            json.dumps(
+                {
+                    "hash": "t1",
+                    "index": 0,
+                    "block_hash": "h1",
+                    "block_number": 1,
+                    "block_timestamp": 12345,
+                    "inputs": [],
+                    "outputs": [],
+                }
+            )
+            + "\n"
+        )
 
-    rc = cli_main([
-        "load_ndjson_to_sqlite",
-        "--db", str(db_path),
-        "--blocks-input", str(blocks_path),
-        "--transactions-input", str(tx_path),
-    ])
+    rc = cli_main(
+        [
+            "load_ndjson_to_sqlite",
+            "--db",
+            str(db_path),
+            "--blocks-input",
+            str(blocks_path),
+            "--transactions-input",
+            str(tx_path),
+        ]
+    )
     assert rc == 0
 
     conn = sqlite3.connect(str(db_path))
