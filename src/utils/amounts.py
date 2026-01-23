@@ -3,7 +3,6 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
-
 SATOSHI_FACTOR = Decimal("100000000")
 
 
@@ -38,4 +37,3 @@ def amounts_map_to_satoshi_map(m: Any) -> Dict[str, int]:
             continue
         out[str(k)] = sat
     return out
-

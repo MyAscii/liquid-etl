@@ -1,0 +1,54 @@
+# Project Context
+This is the `liquid-etl` project, an ETL and streaming service for the Liquid Network (Elements).
+It fetches blocks and transactions from a Liquid node (via RPC) and writes them to various sinks (NDJSON, Postgres, PubSub).
+
+# Tech Stack
+- **Language**: Python 3.9+
+- **Database**: PostgreSQL (via `psycopg` v3)
+- **Testing**: `pytest`
+- **Dependencies**: Managed via `pyproject.toml` (setuptools)
+
+# Code Style & Quality Rules
+
+## Python
+- **Type Hinting**: MUST use type hints for all function arguments and return values.
+  - Use `from __future__ import annotations` at the top of every file.
+  - Use `typing.List`, `typing.Dict`, `typing.Optional`, etc. for compatibility.
+- **Formatting**:
+  - Follow `black` formatting style (line length 100, double quotes).
+  - Use `isort` for import sorting.
+- **Linting**:
+  - Follow `ruff` rules.
+  - Avoid unused imports and variables.
+- **Docstrings**:
+  - All public modules, classes, and functions MUST have a docstring.
+  - Use clear, concise English.
+  - Describe parameters and return values for complex functions.
+
+## Database (Postgres)
+- **Driver**: Use `psycopg` (v3).
+- **Safety**: NEVER interpolate strings into SQL queries. ALWAYS use parameterized queries (e.g., `%(name)s`).
+- **Migrations**:
+  - Schema changes (CREATE TABLE, ADD COLUMN) MUST be idempotent (use `IF NOT EXISTS`).
+  - Cleanup operations (DROP COLUMN) MUST use `IF EXISTS`.
+- **Performance**:
+  - Use `executemany` for batch inserts.
+  - Use `ON CONFLICT` clauses to handle re-ingestion gracefully.
+
+## Testing
+- **Framework**: `pytest`.
+- **Structure**:
+  - `tests/test_smoke.py`: Fast sanity checks.
+  - `tests/test_functional_*.py`: Logic tests with stubbed dependencies.
+  - `tests/test_integration_*.py`: Tests against real services (Postgres, Node).
+- **Coverage**: New features MUST include unit tests.
+
+## Architecture
+- **CLI**: Entry points in `src/cli.py`.
+- **Service Layer**: Business logic in `src/service.py`.
+- **Utils**: Reusable helpers in `src/utils/`.
+- **Normalization**: Convert raw RPC data to flat schemas in `src/utils/normalizer.py`.
+
+# Workflow
+1.  **Refactoring**: When refactoring, ensure existing tests pass. Add new tests if behavior changes.
+2.  **Dependencies**: Add new dependencies to `pyproject.toml` under `dependencies` or `optional-dependencies`.

@@ -30,6 +30,10 @@ postgres = [
 dev = [
   "pytest>=7.0",
   "pytest-cov>=4.0",
+  "ruff>=0.1.0",
+  "black>=23.0",
+  "isort>=5.0",
+  "mypy>=1.0",
 ]
 
 [project.scripts]
@@ -38,11 +42,22 @@ liquidetl = "liquidetl.cli:main"
 [tool.setuptools]
 packages = [
   "liquidetl",
+  "liquidetl.cli",
+  "liquidetl.cli.commands",
+  "liquidetl.service",
   "liquidetl.jobs",
   "liquidetl.streaming",
   "liquidetl.utils",
+  "liquidetl.utils.postgres",
+  "liquidetl.utils.sqlite",
+  "liquidetl.utils.audit",
+  "liquidetl.utils.normalization",
 ]
 package-dir = { "liquidetl" = "src" }
+
+[tool.setuptools.package-data]
+"liquidetl.utils.postgres" = ["sql/*.sql"]
+"liquidetl.utils.sqlite" = ["sql/*.sql"]
 
 [tool.pytest.ini_options]
 markers = [
@@ -51,3 +66,17 @@ markers = [
   "integration: tests that require external services (opt-in via env vars)",
   "e2e: end-to-end tests (opt-in via env vars)",
 ]
+
+[tool.black]
+line-length = 100
+target-version = ["py39"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+select = ["E", "F", "I", "B"]
+ignore = ["E501"] # Allow long lines (let black handle it)
+
+[tool.isort]
+profile = "black"
+line_length = 100

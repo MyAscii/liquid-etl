@@ -25,4 +25,3 @@ def inline_enrich_inputs(service: LiquidService, tx: Dict[str, Any]) -> None:
                 vin["asset"] = pv.get("asset")
         except Exception:
             pass
-

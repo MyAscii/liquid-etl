@@ -5,6 +5,7 @@ __pycache__/
 *.egg
 *.egg-info/
 .eggs/
+.ruff_cache/
 
 # Virtual environments
 .venv/
@@ -13,7 +14,7 @@ ENV/
 
 # IDE/editor
 .vscode/
-.trea/
+.trae/
 .idea/
 *.swp
 

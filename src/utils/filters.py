@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import json
 from decimal import Decimal
-from typing import Callable, Dict, Iterable, Optional
+from typing import Callable, Dict
 
 
 def _compile_predicate(expr: str) -> Callable[[Dict], bool]:
@@ -22,10 +22,15 @@ def _compile_predicate(expr: str) -> Callable[[Dict], bool]:
     return func
 
 
-def filter_items(input_path: str, output_path: str, predicate: str, input_format: str = "ndjson") -> None:
+def filter_items(
+    input_path: str, output_path: str, predicate: str, input_format: str = "ndjson"
+) -> None:
     pred = _compile_predicate(predicate)
     if input_format == "ndjson":
-        with open(input_path, "r", encoding="utf-8") as fin, open(output_path, "w", encoding="utf-8") as fout:
+        with (
+            open(input_path, "r", encoding="utf-8") as fin,
+            open(output_path, "w", encoding="utf-8") as fout,
+        ):
             for line in fin:
                 if not line.strip():
                     continue
