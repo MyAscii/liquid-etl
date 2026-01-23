@@ -48,6 +48,7 @@ packages = [
   "liquidetl.streaming",
   "liquidetl.utils",
   "liquidetl.utils.postgres",
+  "liquidetl.utils.sqlite",
   "liquidetl.utils.normalization",
 ]
 package-dir = { "liquidetl" = "src" }
