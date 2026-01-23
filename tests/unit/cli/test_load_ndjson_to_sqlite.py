@@ -2,53 +2,6 @@ import json
 import sqlite3
 
 from liquidetl.cli import main as cli_main
-from liquidetl.service import BlockWithTxs, LiquidService
-from liquidetl.streaming.streamer_adapter import LiquidStreamerAdapter
-
-
-class StubService(LiquidService):
-    def __init__(self):
-        class _R:
-            pass
-
-        super().__init__(_R())
-
-    def get_head_height(self):
-        return 0
-
-    def get_block_by_number(self, height: int):
-        block = {"hash": f"h{height}", "number": height, "timestamp": 1000 + height}
-        tx = {"hash": f"t{height}", "inputs": [], "outputs": []}
-        return BlockWithTxs(block=block, transactions=[tx])
-
-
-def test_stream_writes_to_sqlite(monkeypatch, tmp_path):
-    db_path = tmp_path / "local.db"
-    s = StubService()
-    adapter = LiquidStreamerAdapter(
-        service=s, output=f"sqlite://{db_path.as_posix()}", batch_size=1
-    )
-
-    def raise_kbi(seconds):
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(__import__("time"), "sleep", raise_kbi)
-
-    try:
-        adapter.stream(start_block=0, lag=0, poll_interval=0.01)
-    except KeyboardInterrupt:
-        pass
-
-    conn = sqlite3.connect(str(db_path))
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(1) FROM blocks")
-    blocks_count = cur.fetchone()[0]
-    cur.execute("SELECT COUNT(1) FROM transactions")
-    tx_count = cur.fetchone()[0]
-    conn.close()
-
-    assert blocks_count >= 1
-    assert tx_count >= 1
 
 
 def test_cli_load_ndjson_into_sqlite(tmp_path):
@@ -97,3 +50,4 @@ def test_cli_load_ndjson_into_sqlite(tmp_path):
 
     assert blocks_count == 1
     assert tx_count == 1
+

@@ -8,6 +8,7 @@ from liquidetl.service import LiquidService
 from liquidetl.utils.sqlite_writer import SQLiteWriter
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(
     not os.environ.get("LIQUID_RPC_URI"),
     reason="Set LIQUID_RPC_URI to run real RPC integration tests",
