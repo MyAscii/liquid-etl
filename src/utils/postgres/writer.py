@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from ..amounts import to_satoshi
@@ -11,7 +12,7 @@ from .sql_files import sql_text
 
 
 class PostgresWriter:
-    def __init__(self, dsn: str):
+    def __init__(self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False):
         self.dsn = dsn
         try:
             import psycopg
@@ -20,7 +21,20 @@ class PostgresWriter:
                 "psycopg not installed; install with pip install -e .[postgres]"
             ) from e
         self.conn = psycopg.connect(dsn, autocommit=True)
+        if fast_local:
+            with self.conn.cursor() as cur:
+                cur.execute("SET synchronous_commit TO OFF")
         self._ensure_schema()
+        self._insert_blocks_sql = _apply_conflict_strategy(
+            sql_text("insert_blocks.sql"), conflict_strategy
+        )
+        self._insert_transactions_sql = _apply_conflict_strategy(
+            sql_text("insert_transactions.sql"), conflict_strategy
+        )
+        self._insert_txins_sql = _apply_conflict_strategy(sql_text("insert_txins.sql"), conflict_strategy)
+        self._insert_txouts_sql = _apply_conflict_strategy(
+            sql_text("insert_txouts.sql"), conflict_strategy
+        )
 
     def close(self) -> None:
         self.conn.close()
@@ -279,7 +293,7 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                sql_text("insert_blocks.sql"),
+                self._insert_blocks_sql,
                 payloads,
             )
 
@@ -310,7 +324,7 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                sql_text("insert_transactions.sql"),
+                self._insert_transactions_sql,
                 payloads,
             )
 
@@ -336,7 +350,7 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                sql_text("insert_txins.sql"),
+                self._insert_txins_sql,
                 payloads,
             )
 
@@ -346,6 +360,24 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                sql_text("insert_txouts.sql"),
+                self._insert_txouts_sql,
                 payloads,
             )
+
+
+def _apply_conflict_strategy(sql: str, strategy: str) -> str:
+    normalized = str(strategy).strip().lower()
+    if normalized == "update":
+        return sql
+    if normalized == "ignore":
+        return _rewrite_upsert_to_do_nothing(sql)
+    raise ValueError(f"Unsupported conflict strategy: {strategy}")
+
+
+def _rewrite_upsert_to_do_nothing(sql: str) -> str:
+    m = re.search(r"ON\s+CONFLICT\s*\(([^)]+)\)\s*DO\s+UPDATE\s+SET", sql, flags=re.IGNORECASE)
+    if not m:
+        raise ValueError("SQL does not contain an ON CONFLICT DO UPDATE clause")
+    target = m.group(1).strip()
+    prefix = sql[: m.start()].rstrip()
+    return f"{prefix}\nON CONFLICT ({target}) DO NOTHING"

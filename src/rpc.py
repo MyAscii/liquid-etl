@@ -22,10 +22,17 @@ class LiquidRpc:
     - Accepts URIs like http://user:pass@host:7041.
     """
 
-    def __init__(self, provider_uri: str, timeout: float = 30.0, datadir: Optional[str] = None):
+    def __init__(
+        self,
+        provider_uri: str,
+        timeout: float = 30.0,
+        datadir: Optional[str] = None,
+        use_decimal: bool = True,
+    ):
         self._provider_uri = provider_uri
         self._timeout = timeout
         self._session = requests.Session()
+        self._use_decimal = bool(use_decimal)
 
         parsed = urlparse(provider_uri)
         self._url = f"{parsed.scheme}://{parsed.hostname}:{parsed.port or 7041}"
@@ -41,7 +48,9 @@ class LiquidRpc:
         self._request_id = 0
 
     def _decode(self, text: str) -> Any:
-        return json.loads(text, parse_float=Decimal)
+        if self._use_decimal:
+            return json.loads(text, parse_float=Decimal)
+        return json.loads(text)
 
     def call(self, method: str, params: Optional[List[Any]] = None) -> Any:
         self._request_id += 1

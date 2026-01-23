@@ -150,6 +150,15 @@ def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
     assert txouts[0]["surjection_proof"] == "sp"
 
 
+def test_rewrite_upsert_to_do_nothing_keeps_conflict_target():
+    from liquidetl.utils.postgres import writer as pg_writer
+
+    sql = "INSERT INTO t(a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = EXCLUDED.a"
+    out = pg_writer._rewrite_upsert_to_do_nothing(sql)
+    assert "ON CONFLICT (a) DO NOTHING" in out
+    assert "DO UPDATE SET" not in out
+
+
 def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
     state = {
         "tables": {

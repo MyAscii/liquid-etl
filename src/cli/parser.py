@@ -121,8 +121,22 @@ def build_parser() -> argparse.ArgumentParser:
         "ingest_range_to_postgres", help="Directly ingest a block range into Postgres"
     )
     add_common_provider(p_ingest_pg)
-    p_ingest_pg.add_argument("-s", "-start", "--start-block", type=int, required=True)
-    p_ingest_pg.add_argument("-e", "-end", "--end-block", type=int, required=True)
+    p_ingest_pg.add_argument(
+        "-s",
+        "-start",
+        "--start-block",
+        type=int,
+        default=1,
+        help="Start height (default: 1)",
+    )
+    p_ingest_pg.add_argument(
+        "-e",
+        "-end",
+        "--end-block",
+        type=int,
+        default=None,
+        help="End height (default: node tip)",
+    )
     p_ingest_pg.add_argument(
         "--dsn",
         help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl",
@@ -131,8 +145,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest_pg.add_argument(
         "--rpc-batch-size",
         type=int,
-        default=25,
+        default=200,
         help="Batch size for RPC calls (reduces round trips)",
+    )
+    p_ingest_pg.add_argument(
+        "--chunk-size",
+        type=int,
+        default=500,
+        help="Number of blocks per DB transaction",
+    )
+    p_ingest_pg.add_argument(
+        "--prefetch",
+        type=int,
+        default=8,
+        help="Prefetch N chunks in a background thread (default: 0)",
+    )
+    p_ingest_pg.add_argument(
+        "--conflict-strategy",
+        choices=("update", "ignore"),
+        default="update",
+        help="How to handle existing rows (default: update)",
+    )
+    p_ingest_pg.add_argument(
+        "--fast-local",
+        action="store_true",
+        help="Aggressive local-mode defaults (ignore conflicts, disable synchronous_commit, enable prefetch)",
+    )
+    p_ingest_pg.add_argument(
+        "--fast-rpc-decode",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Decode RPC floats as float (faster, less precise than Decimal)",
     )
     pbar = p_ingest_pg.add_mutually_exclusive_group(required=False)
     pbar.add_argument("--progress", action="store_true", help="Force progress output")

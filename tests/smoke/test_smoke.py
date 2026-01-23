@@ -16,9 +16,16 @@ def test_smoke_cli_help_exits_cleanly(capsys):
 @pytest.mark.smoke
 def test_smoke_ingest_range_executes_with_stubs(monkeypatch):
     class StubRpc:
-        def __init__(self, provider_uri: str, timeout: float = 30.0, datadir=None):
+        def __init__(
+            self,
+            provider_uri: str,
+            timeout: float = 30.0,
+            datadir=None,
+            use_decimal: bool = True,
+        ):
             self.provider_uri = provider_uri
             self.datadir = datadir
+            self.use_decimal = use_decimal
 
         def getblockchaininfo(self):
             return {"chain": "liquidv1"}
@@ -41,9 +48,10 @@ def test_smoke_ingest_range_executes_with_stubs(monkeypatch):
     captured = {"chunks": 0, "blocks": 0, "txs": 0, "ins": 0, "outs": 0}
 
     class StubWriter:
-        def __init__(self, dsn: str, network: str = "liquidv1"):
+        def __init__(self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False):
             self.dsn = dsn
-            self.network = network
+            self.conflict_strategy = conflict_strategy
+            self.fast_local = fast_local
 
         def write_chunk(self, block_rows, tx_rows, txin_rows, txout_rows):
             captured["chunks"] += 1
@@ -80,3 +88,68 @@ def test_smoke_ingest_range_executes_with_stubs(monkeypatch):
     assert captured["chunks"] == 1
     assert captured["blocks"] == 2
     assert captured["txs"] == 0
+
+
+@pytest.mark.smoke
+def test_smoke_ingest_range_defaults_to_tip(monkeypatch):
+    class StubRpc:
+        def __init__(
+            self,
+            provider_uri: str,
+            timeout: float = 30.0,
+            datadir=None,
+            use_decimal: bool = True,
+        ):
+            self.provider_uri = provider_uri
+            self.datadir = datadir
+            self.use_decimal = use_decimal
+
+        def getblockcount(self):
+            return 2
+
+        def batch_call(self, calls):
+            if not calls:
+                return []
+            method = calls[0][0]
+            if method == "getblockhash":
+                return [f"h{params[0]}" for _, params in calls]
+            if method == "getblock":
+                out = []
+                for _, params in calls:
+                    bh = params[0]
+                    height = int(bh[1:])
+                    out.append({"hash": bh, "height": height, "time": 1, "tx": []})
+                return out
+            raise AssertionError(f"unexpected method {method}")
+
+    captured = {"blocks": 0}
+
+    class StubWriter:
+        def __init__(self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False):
+            self.dsn = dsn
+            self.conflict_strategy = conflict_strategy
+            self.fast_local = fast_local
+
+        def write_chunk(self, block_rows, tx_rows, txin_rows, txout_rows):
+            captured["blocks"] += len(block_rows)
+
+        def close(self):
+            return None
+
+    monkeypatch.setattr(rpc_mod, "LiquidRpc", StubRpc)
+    monkeypatch.setattr(pg_mod, "PostgresWriter", StubWriter)
+
+    rc = cli_mod.main(
+        [
+            "ingest_range_to_postgres",
+            "-p",
+            "http://127.0.0.1:7041",
+            "--datadir",
+            "E:\\Elements",
+            "--dsn",
+            "postgresql://u:p@localhost:5433/db",
+            "--no-progress",
+        ]
+    )
+    assert rc == 0
+    assert captured["blocks"] == 2
