@@ -43,6 +43,7 @@ liquidetl = "liquidetl.cli:main"
 packages = [
   "liquidetl",
   "liquidetl.cli",
+  "liquidetl.cli.commands",
   "liquidetl.jobs",
   "liquidetl.streaming",
   "liquidetl.utils",
