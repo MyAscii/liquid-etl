@@ -7,7 +7,6 @@ def add_common_provider(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "-p",
         "--provider-uri",
-        required=True,
         help="JSON-RPC URI, e.g. http://user:pass@localhost:7041",
     )
     parser.add_argument(

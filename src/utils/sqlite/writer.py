@@ -5,6 +5,7 @@ import sqlite3
 from typing import Any, Dict
 
 from .schema import ensure_schema
+from .sql_files import sql_text
 
 
 class SQLiteWriter:
@@ -16,42 +17,7 @@ class SQLiteWriter:
     def write_block(self, block: Dict[str, Any]) -> None:
         cur = self.conn.cursor()
         cur.execute(
-            """
-            INSERT INTO blocks (
-                hash, number, timestamp, median_time, confirmations,
-                size, stripped_size, weight,
-                version, version_hex, merkle_root, nonce, bits,
-                previous_block_hash, next_block_hash,
-                transaction_count,
-                signblock_challenge, signblock_witness_asm, signblock_witness_hex
-            ) VALUES (
-                :hash, :number, :timestamp, :median_time, :confirmations,
-                :size, :stripped_size, :weight,
-                :version, :version_hex, :merkle_root, :nonce, :bits,
-                :previous_block_hash, :next_block_hash,
-                :transaction_count,
-                :signblock_challenge, :signblock_witness_asm, :signblock_witness_hex
-            )
-            ON CONFLICT(hash) DO UPDATE SET
-                number=excluded.number,
-                timestamp=excluded.timestamp,
-                median_time=excluded.median_time,
-                confirmations=excluded.confirmations,
-                size=excluded.size,
-                stripped_size=excluded.stripped_size,
-                weight=excluded.weight,
-                version=excluded.version,
-                version_hex=excluded.version_hex,
-                merkle_root=excluded.merkle_root,
-                nonce=excluded.nonce,
-                bits=excluded.bits,
-                previous_block_hash=excluded.previous_block_hash,
-                next_block_hash=excluded.next_block_hash,
-                transaction_count=excluded.transaction_count,
-                signblock_challenge=excluded.signblock_challenge,
-                signblock_witness_asm=excluded.signblock_witness_asm,
-                signblock_witness_hex=excluded.signblock_witness_hex
-            """,
+            sql_text("insert_blocks.sql"),
             {
                 "hash": block.get("hash") or block.get("item_id"),
                 "number": block.get("number") or block.get("height"),
@@ -80,52 +46,7 @@ class SQLiteWriter:
     def write_transaction(self, tx: Dict[str, Any]) -> None:
         cur = self.conn.cursor()
         cur.execute(
-            """
-            INSERT INTO transactions (
-                hash, txid, wtxid, withash, tx_hex,
-                "index", block_hash, block_number, block_timestamp,
-                lock_time, size, virtual_size, discount_virtual_size,
-                version, is_coinbase,
-                input_count, output_count, input_value, output_value, fee,
-                node_fee,
-                inputs, outputs,
-                weight, discount_weight, sigops
-            ) VALUES (
-                :hash, :txid, :wtxid, :withash, :tx_hex,
-                :index, :block_hash, :block_number, :block_timestamp,
-                :lock_time, :size, :virtual_size, :discount_virtual_size,
-                :version, :is_coinbase,
-                :input_count, :output_count, :input_value, :output_value, :fee,
-                :node_fee,
-                :inputs, :outputs,
-                :weight, :discount_weight, :sigops
-            )
-            ON CONFLICT(hash, "index") DO UPDATE SET
-                txid=excluded.txid,
-                wtxid=excluded.wtxid,
-                withash=excluded.withash,
-                tx_hex=excluded.tx_hex,
-                block_hash=excluded.block_hash,
-                block_number=excluded.block_number,
-                block_timestamp=excluded.block_timestamp,
-                lock_time=excluded.lock_time,
-                size=excluded.size,
-                virtual_size=excluded.virtual_size,
-                discount_virtual_size=excluded.discount_virtual_size,
-                version=excluded.version,
-                is_coinbase=excluded.is_coinbase,
-                input_count=excluded.input_count,
-                output_count=excluded.output_count,
-                input_value=excluded.input_value,
-                output_value=excluded.output_value,
-                fee=excluded.fee,
-                node_fee=excluded.node_fee,
-                inputs=excluded.inputs,
-                outputs=excluded.outputs,
-                weight=excluded.weight,
-                discount_weight=excluded.discount_weight,
-                sigops=excluded.sigops
-            """,
+            sql_text("insert_transactions.sql"),
             {
                 "hash": tx.get("hash") or tx.get("item_id"),
                 "txid": tx.get("txid"),

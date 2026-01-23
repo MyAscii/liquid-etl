@@ -55,6 +55,10 @@ packages = [
 ]
 package-dir = { "liquidetl" = "src" }
 
+[tool.setuptools.package-data]
+"liquidetl.utils.postgres" = ["sql/*.sql"]
+"liquidetl.utils.sqlite" = ["sql/*.sql"]
+
 [tool.pytest.ini_options]
 markers = [
   "smoke: fast sanity tests",

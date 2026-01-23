@@ -20,6 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="liquidetl", description="Liquid Network ETL and streaming toolkit"
     )
+    parser.add_argument(
+        "--config",
+        help="Path to liquidetl.config.json (defaults: ./liquidetl.config.json or ~/.config/liquidetl/config.json)",
+    )
+    parser.add_argument("--profile", help="Optional config profile name (config.profiles.<name>)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_export = sub.add_parser(
@@ -90,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="'console', 'sqlite:///path/to.db', 'postgres://user:pass@host:5432/dbname' or projects/.../topics/crypto_liquid",
     )
     p_stream.add_argument("--batch-size", type=int, default=100)
+    p_stream.add_argument("--rpc-batch-size", type=int, default=1, help="Number of blocks to fetch concurrently")
     p_stream.add_argument("--poll-interval", type=float, default=2.0)
     p_stream.add_argument("--enrich", action="store_true")
     p_stream.set_defaults(func=stream)
@@ -97,7 +103,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_load = sub.add_parser(
         "load_ndjson_to_sqlite", help="Load NDJSON exports into a local SQLite DB"
     )
-    p_load.add_argument("--db", required=True, help="Path to .db file")
+    p_load.add_argument("--db", help="Path to .db file")
     p_load.add_argument("--blocks-input", help="Path to blocks NDJSON")
     p_load.add_argument("--transactions-input", help="Path to transactions NDJSON")
     p_load.set_defaults(func=load_ndjson_to_sqlite)
@@ -105,7 +111,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_load_pg = sub.add_parser("load_ndjson_to_postgres", help="Load NDJSON exports into Postgres")
     p_load_pg.add_argument(
         "--dsn",
-        required=True,
         help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl",
     )
     p_load_pg.add_argument("--blocks-input", help="Path to blocks NDJSON")
@@ -120,7 +125,6 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest_pg.add_argument("-e", "-end", "--end-block", type=int, required=True)
     p_ingest_pg.add_argument(
         "--dsn",
-        required=True,
         help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl",
     )
     p_ingest_pg.add_argument("--enrich", action="store_true")
@@ -150,7 +154,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_repair_pg.add_argument(
         "--dsn",
-        required=True,
         help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl",
     )
     p_repair_pg.add_argument(

@@ -7,6 +7,7 @@ from ..amounts import to_satoshi
 from .coercion import coerce_block_row, coerce_tx_rows
 from .migrations import migrate_tables
 from .schema import ensure_schema
+from .sql_files import sql_text
 
 
 class PostgresWriter:
@@ -278,35 +279,7 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                """
-                INSERT INTO blocks (
-                    hash, height, version, prev_block_hash, next_block_hash,
-                    merkle_root, time, median_time,
-                    tx_count, size, stripped_size, weight,
-                    signblock_solution_hex,
-                    txids
-                ) VALUES (
-                    %(hash)s, %(height)s, %(version)s, %(prev_block_hash)s, %(next_block_hash)s,
-                    %(merkle_root)s, %(time)s, %(median_time)s,
-                    %(tx_count)s, %(size)s, %(stripped_size)s, %(weight)s,
-                    %(signblock_solution_hex)s,
-                    %(txids)s::jsonb
-                )
-                ON CONFLICT (hash) DO UPDATE SET
-                    height = EXCLUDED.height,
-                    version = EXCLUDED.version,
-                    prev_block_hash = EXCLUDED.prev_block_hash,
-                    next_block_hash = EXCLUDED.next_block_hash,
-                    merkle_root = EXCLUDED.merkle_root,
-                    time = EXCLUDED.time,
-                    median_time = EXCLUDED.median_time,
-                    tx_count = EXCLUDED.tx_count,
-                    size = EXCLUDED.size,
-                    stripped_size = EXCLUDED.stripped_size,
-                    weight = EXCLUDED.weight,
-                    signblock_solution_hex = EXCLUDED.signblock_solution_hex,
-                    txids = EXCLUDED.txids
-                """,
+                sql_text("insert_blocks.sql"),
                 payloads,
             )
 
@@ -337,47 +310,7 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                """
-                INSERT INTO transactions (
-                    txid, wtxid, hash, withash,
-                    block_hash, block_height, block_time, tx_index_in_block, confirmed,
-                    version, lock_time, size, vsize, weight, discount_vsize, discount_weight,
-                    vin_count, vout_count,
-                    fee_by_asset, explicit_in_by_asset, explicit_out_by_asset,
-                    has_any_confidential, has_pegin, has_issuance
-                ) VALUES (
-                    %(txid)s, %(wtxid)s, %(hash)s, %(withash)s,
-                    %(block_hash)s, %(block_height)s, %(block_time)s, %(tx_index_in_block)s, %(confirmed)s,
-                    %(version)s, %(lock_time)s, %(size)s, %(vsize)s, %(weight)s, %(discount_vsize)s, %(discount_weight)s,
-                    %(vin_count)s, %(vout_count)s,
-                    %(fee_by_asset)s::jsonb, %(explicit_in_by_asset)s::jsonb, %(explicit_out_by_asset)s::jsonb,
-                    %(has_any_confidential)s, %(has_pegin)s, %(has_issuance)s
-                )
-                ON CONFLICT (txid) DO UPDATE SET
-                    wtxid = EXCLUDED.wtxid,
-                    hash = EXCLUDED.hash,
-                    withash = EXCLUDED.withash,
-                    block_hash = EXCLUDED.block_hash,
-                    block_height = EXCLUDED.block_height,
-                    block_time = EXCLUDED.block_time,
-                    tx_index_in_block = EXCLUDED.tx_index_in_block,
-                    confirmed = EXCLUDED.confirmed,
-                    version = EXCLUDED.version,
-                    lock_time = EXCLUDED.lock_time,
-                    size = EXCLUDED.size,
-                    vsize = EXCLUDED.vsize,
-                    weight = EXCLUDED.weight,
-                    discount_vsize = EXCLUDED.discount_vsize,
-                    discount_weight = EXCLUDED.discount_weight,
-                    vin_count = EXCLUDED.vin_count,
-                    vout_count = EXCLUDED.vout_count,
-                    fee_by_asset = EXCLUDED.fee_by_asset,
-                    explicit_in_by_asset = EXCLUDED.explicit_in_by_asset,
-                    explicit_out_by_asset = EXCLUDED.explicit_out_by_asset,
-                    has_any_confidential = EXCLUDED.has_any_confidential,
-                    has_pegin = EXCLUDED.has_pegin,
-                    has_issuance = EXCLUDED.has_issuance
-                """,
+                sql_text("insert_transactions.sql"),
                 payloads,
             )
 
@@ -403,45 +336,7 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                """
-                INSERT INTO txins (
-                    txid, vin,
-                    prev_txid, prev_vout, sequence, is_coinbase,
-                    scriptsig_hex, scriptsig_asm,
-                    txinwitness, pegin_witness,
-                    is_pegin,
-                    has_issuance, issuance_asset_blinding_nonce, issuance_asset_entropy,
-                    issuance_amount, issuance_inflation_keys,
-                    prevout_scriptpubkey_hex, prevout_script_type, prevout_address
-                ) VALUES (
-                    %(txid)s, %(vin)s,
-                    %(prev_txid)s, %(prev_vout)s, %(sequence)s, %(is_coinbase)s,
-                    %(scriptsig_hex)s, %(scriptsig_asm)s,
-                    %(txinwitness)s::jsonb, %(pegin_witness)s::jsonb,
-                    %(is_pegin)s,
-                    %(has_issuance)s, %(issuance_asset_blinding_nonce)s, %(issuance_asset_entropy)s,
-                    %(issuance_amount)s, %(issuance_inflation_keys)s,
-                    %(prevout_scriptpubkey_hex)s, %(prevout_script_type)s, %(prevout_address)s
-                )
-                ON CONFLICT (txid, vin) DO UPDATE SET
-                    prev_txid = EXCLUDED.prev_txid,
-                    prev_vout = EXCLUDED.prev_vout,
-                    sequence = EXCLUDED.sequence,
-                    is_coinbase = EXCLUDED.is_coinbase,
-                    scriptsig_hex = EXCLUDED.scriptsig_hex,
-                    scriptsig_asm = EXCLUDED.scriptsig_asm,
-                    txinwitness = EXCLUDED.txinwitness,
-                    pegin_witness = EXCLUDED.pegin_witness,
-                    is_pegin = EXCLUDED.is_pegin,
-                    has_issuance = EXCLUDED.has_issuance,
-                    issuance_asset_blinding_nonce = EXCLUDED.issuance_asset_blinding_nonce,
-                    issuance_asset_entropy = EXCLUDED.issuance_asset_entropy,
-                    issuance_amount = EXCLUDED.issuance_amount,
-                    issuance_inflation_keys = EXCLUDED.issuance_inflation_keys,
-                    prevout_scriptpubkey_hex = EXCLUDED.prevout_scriptpubkey_hex,
-                    prevout_script_type = EXCLUDED.prevout_script_type,
-                    prevout_address = EXCLUDED.prevout_address
-                """,
+                sql_text("insert_txins.sql"),
                 payloads,
             )
 
@@ -451,33 +346,6 @@ class PostgresWriter:
             return
         with self.conn.cursor() as cur:
             cur.executemany(
-                """
-                INSERT INTO txouts (
-                    txid, vout,
-                    asset_id, asset_commitment, value_sat, value_commitment,
-                    scriptpubkey_hex, scriptpubkey_asm, script_type, address,
-                    is_op_return, op_return_data_hex,
-                    is_fee, surjection_proof
-                ) VALUES (
-                    %(txid)s, %(vout)s,
-                    %(asset_id)s, %(asset_commitment)s, %(value_sat)s, %(value_commitment)s,
-                    %(scriptpubkey_hex)s, %(scriptpubkey_asm)s, %(script_type)s, %(address)s,
-                    %(is_op_return)s, %(op_return_data_hex)s,
-                    %(is_fee)s, %(surjection_proof)s
-                )
-                ON CONFLICT (txid, vout) DO UPDATE SET
-                    asset_id = EXCLUDED.asset_id,
-                    asset_commitment = EXCLUDED.asset_commitment,
-                    value_sat = EXCLUDED.value_sat,
-                    value_commitment = EXCLUDED.value_commitment,
-                    scriptpubkey_hex = EXCLUDED.scriptpubkey_hex,
-                    scriptpubkey_asm = EXCLUDED.scriptpubkey_asm,
-                    script_type = EXCLUDED.script_type,
-                    address = EXCLUDED.address,
-                    is_op_return = EXCLUDED.is_op_return,
-                    op_return_data_hex = EXCLUDED.op_return_data_hex,
-                    is_fee = EXCLUDED.is_fee,
-                    surjection_proof = EXCLUDED.surjection_proof
-                """,
+                sql_text("insert_txouts.sql"),
                 payloads,
             )
