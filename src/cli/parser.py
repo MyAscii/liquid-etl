@@ -103,6 +103,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_stream.add_argument("--rpc-batch-size", type=int, default=1, help="Number of blocks to fetch concurrently")
     p_stream.add_argument("--poll-interval", type=float, default=2.0)
     p_stream.add_argument("--enrich", action="store_true")
+    p_stream.add_argument(
+        "--dead-letter",
+        default=None,
+        help="Append blocks that fail repeatedly to this NDJSON file and skip them "
+        "(default: abort the stream after --max-block-failures)",
+    )
+    p_stream.add_argument(
+        "--max-block-failures",
+        type=int,
+        default=5,
+        help="Consecutive failures on one block before dead-lettering or aborting (default: 5)",
+    )
     p_stream.set_defaults(func=stream)
 
     p_load = sub.add_parser(

@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from contextlib import contextmanager
+from typing import Any, Dict, Iterable, Iterator, List, Optional
 
 from .coercion import coerce_block_row, coerce_tx_rows
 from .migrations import migrate_tables
@@ -37,6 +38,12 @@ class PostgresWriter:
 
     def close(self) -> None:
         self.conn.close()
+
+    @contextmanager
+    def batch(self) -> Iterator["PostgresWriter"]:
+        """Group a block and its transactions into a single committed transaction."""
+        with self.conn.transaction():
+            yield self
 
     def _ensure_schema(self) -> None:
         with self.conn.cursor() as cur:
