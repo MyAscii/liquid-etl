@@ -36,3 +36,13 @@ src/liquid_etl.egg-info/
 
 #data
 sample_data/
+
+# ai-dev
+.ai-dev/
+.claude/skills/
+.codex/skills/
+.trae/skills/
+.cursor/skills/
+
+/AGENTS.md
+/CLAUDE.md
