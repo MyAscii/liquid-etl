@@ -65,6 +65,7 @@ markers = [
   "functional: functional tests with stubbed dependencies",
   "integration: tests that require external services (opt-in via env vars)",
   "e2e: end-to-end tests (opt-in via env vars)",
+  "eval: deterministic golden-fixture evals (no LLM/node)",
 ]
 
 [tool.black]

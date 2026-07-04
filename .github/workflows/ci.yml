@@ -20,11 +20,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .[dev]
       - name: Ruff
-        run: ruff check src tests tune_ingest.py
+        run: ruff check src tests services tune_ingest.py
       - name: Black
-        run: black --check src tests tune_ingest.py
+        run: black --check src tests services tune_ingest.py
       - name: isort
-        run: isort --check-only src tests tune_ingest.py
+        run: isort --check-only src tests services tune_ingest.py
 
   tests:
     runs-on: ${{ matrix.os }}

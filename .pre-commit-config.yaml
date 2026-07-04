@@ -6,21 +6,21 @@ repos:
     hooks:
       - id: ruff
         args: [--fix]
-        files: ^(src|tests|tune_ingest\.py)
+        files: ^(src|tests|services|tune_ingest\.py)
       - id: ruff-format
-        files: ^(src|tests|tune_ingest\.py)
+        files: ^(src|tests|services|tune_ingest\.py)
 
   - repo: https://github.com/pycqa/isort
     rev: 5.13.2
     hooks:
       - id: isort
-        files: ^(src|tests|tune_ingest\.py)
+        files: ^(src|tests|services|tune_ingest\.py)
 
   - repo: https://github.com/psf/black
     rev: 24.8.0
     hooks:
       - id: black
-        files: ^(src|tests|tune_ingest\.py)
+        files: ^(src|tests|services|tune_ingest\.py)
 
   - repo: local
     hooks:
