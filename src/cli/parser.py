@@ -68,14 +68,19 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.set_defaults(func=export_all)
 
     p_filter = sub.add_parser(
-        "filter_items", help="Filter NDJSON or CSV outputs using a Python predicate"
+        "filter_items", help="Filter NDJSON or CSV outputs using a JSON predicate spec"
     )
     p_filter.add_argument("--input", required=True)
     p_filter.add_argument("--output", required=True)
     p_filter.add_argument(
         "--predicate",
         required=True,
-        help='Python expression like \'lambda x: x["block_timestamp"][:10]=="2019-03-01"\'',
+        help=(
+            "JSON predicate spec, e.g. "
+            '\'{"field": "block_timestamp", "op": "startswith", "value": "2019-03-01"}\'. '
+            "Ops: eq ne lt le gt ge contains startswith endswith in regex exists; "
+            'combine with {"and":[...]}, {"or":[...]}, {"not":{...}}.'
+        ),
     )
     p_filter.add_argument("--format", choices=("ndjson", "csv"), default="ndjson")
     p_filter.set_defaults(func=filter_items)
@@ -95,9 +100,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="'console', 'sqlite:///path/to.db', 'postgres://user:pass@host:5432/dbname' or projects/.../topics/crypto_liquid",
     )
     p_stream.add_argument("--batch-size", type=int, default=100)
-    p_stream.add_argument("--rpc-batch-size", type=int, default=1, help="Number of blocks to fetch concurrently")
+    p_stream.add_argument(
+        "--rpc-batch-size", type=int, default=1, help="Number of blocks to fetch concurrently"
+    )
     p_stream.add_argument("--poll-interval", type=float, default=2.0)
     p_stream.add_argument("--enrich", action="store_true")
+    p_stream.add_argument(
+        "--dead-letter",
+        default=None,
+        help="Append blocks that fail repeatedly to this NDJSON file and skip them "
+        "(default: abort the stream after --max-block-failures)",
+    )
+    p_stream.add_argument(
+        "--max-block-failures",
+        type=int,
+        default=5,
+        help="Consecutive failures on one block before dead-lettering or aborting (default: 5)",
+    )
     p_stream.set_defaults(func=stream)
 
     p_load = sub.add_parser(
@@ -121,8 +140,22 @@ def build_parser() -> argparse.ArgumentParser:
         "ingest_range_to_postgres", help="Directly ingest a block range into Postgres"
     )
     add_common_provider(p_ingest_pg)
-    p_ingest_pg.add_argument("-s", "-start", "--start-block", type=int, required=True)
-    p_ingest_pg.add_argument("-e", "-end", "--end-block", type=int, required=True)
+    p_ingest_pg.add_argument(
+        "-s",
+        "-start",
+        "--start-block",
+        type=int,
+        default=1,
+        help="Start height (default: 1)",
+    )
+    p_ingest_pg.add_argument(
+        "-e",
+        "-end",
+        "--end-block",
+        type=int,
+        default=None,
+        help="End height (default: node tip)",
+    )
     p_ingest_pg.add_argument(
         "--dsn",
         help="Postgres DSN, e.g. postgresql://user:pass@localhost:5432/liquidetl",
@@ -131,8 +164,37 @@ def build_parser() -> argparse.ArgumentParser:
     p_ingest_pg.add_argument(
         "--rpc-batch-size",
         type=int,
-        default=25,
+        default=200,
         help="Batch size for RPC calls (reduces round trips)",
+    )
+    p_ingest_pg.add_argument(
+        "--chunk-size",
+        type=int,
+        default=500,
+        help="Number of blocks per DB transaction",
+    )
+    p_ingest_pg.add_argument(
+        "--prefetch",
+        type=int,
+        default=8,
+        help="Prefetch N chunks in a background thread (default: 8; 0 disables)",
+    )
+    p_ingest_pg.add_argument(
+        "--conflict-strategy",
+        choices=("update", "ignore"),
+        default="update",
+        help="How to handle existing rows (default: update)",
+    )
+    p_ingest_pg.add_argument(
+        "--fast-local",
+        action="store_true",
+        help="Aggressive local-mode defaults (ignore conflicts, disable synchronous_commit, enable prefetch)",
+    )
+    p_ingest_pg.add_argument(
+        "--fast-rpc-decode",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Decode RPC floats as float (faster, less precise than Decimal)",
     )
     pbar = p_ingest_pg.add_mutually_exclusive_group(required=False)
     pbar.add_argument("--progress", action="store_true", help="Force progress output")

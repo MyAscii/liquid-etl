@@ -25,7 +25,11 @@ def test_stream_writes_to_sqlite(monkeypatch, tmp_path, stub_service):
     blocks_count = cur.fetchone()[0]
     cur.execute("SELECT COUNT(1) FROM transactions")
     tx_count = cur.fetchone()[0]
+    # H3: genesis (height 0) must persist with number=0, not NULL.
+    cur.execute("SELECT number FROM blocks WHERE hash = 'h0'")
+    genesis_number = cur.fetchone()[0]
     conn.close()
 
     assert blocks_count >= 1
     assert tx_count >= 1
+    assert genesis_number == 0

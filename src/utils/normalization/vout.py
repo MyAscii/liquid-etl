@@ -28,7 +28,7 @@ def normalize_vout(vout: Dict[str, Any], *, network: str, txid: Optional[str]) -
         "scriptpubkey_asm": spk.get("asm") if isinstance(spk, dict) else None,
         "script_type": spk.get("type") if isinstance(spk, dict) else None,
         "address": pick_address(spk),
-        "is_op_return": bool(op_return_data_hex),
+        "is_op_return": op_return_data_hex is not None,
         "op_return_data_hex": op_return_data_hex,
         "is_fee": is_fee,
         "is_pegout": is_pegout,

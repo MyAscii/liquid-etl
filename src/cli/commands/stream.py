@@ -21,6 +21,8 @@ def stream(args: argparse.Namespace) -> int:
         output=args.output,
         batch_size=args.batch_size,
         enrich=args.enrich,
+        dead_letter=getattr(args, "dead_letter", None),
+        max_block_failures=getattr(args, "max_block_failures", 5),
     )
     adapter.stream(start_block=start_block, lag=args.lag, poll_interval=args.poll_interval)
     return 0
@@ -43,16 +45,20 @@ def _resume_start_from_postgres(dsn: str) -> Optional[int]:
 
     try:
         tmp_writer = PostgresWriter(dsn)
-        max_height = tmp_writer.get_max_block_height()
-        tmp_writer.close()
-        if max_height is not None:
-            start_block = max_height + 1
-            print(
-                f"Resuming from block {start_block} (DB max height: {max_height})", file=sys.stderr
-            )
-            return start_block
-        print("Database empty, starting from block 0", file=sys.stderr)
-        return 0
     except Exception as e:
         print(f"Error checking DB state: {e}", file=sys.stderr)
         return None
+    try:
+        max_height = tmp_writer.get_max_block_height()
+    except Exception as e:
+        print(f"Error checking DB state: {e}", file=sys.stderr)
+        return None
+    finally:
+        tmp_writer.close()
+
+    if max_height is not None:
+        start_block = max_height + 1
+        print(f"Resuming from block {start_block} (DB max height: {max_height})", file=sys.stderr)
+        return start_block
+    print("Database empty, starting from block 0", file=sys.stderr)
+    return 0

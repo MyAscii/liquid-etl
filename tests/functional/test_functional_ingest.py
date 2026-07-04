@@ -7,9 +7,16 @@ import pytest
 @pytest.mark.functional
 def test_ingest_range_builds_expected_rows(monkeypatch):
     class StubRpc:
-        def __init__(self, provider_uri: str, timeout: float = 30.0, datadir=None):
+        def __init__(
+            self,
+            provider_uri: str,
+            timeout: float = 30.0,
+            datadir=None,
+            use_decimal: bool = True,
+        ):
             self.provider_uri = provider_uri
             self.datadir = datadir
+            self.use_decimal = use_decimal
 
         def getblockchaininfo(self):
             return {"chain": "liquidv1"}
@@ -69,11 +76,15 @@ def test_ingest_range_builds_expected_rows(monkeypatch):
                 return out
             raise AssertionError(f"unexpected method {method}")
 
-    captured = {"network": None, "blocks": None, "txs": None, "ins": None, "outs": None}
+    captured = {"dsn": None, "blocks": None, "txs": None, "ins": None, "outs": None}
 
     class StubWriter:
-        def __init__(self, dsn: str, network: str = "liquidv1"):
-            captured["network"] = network
+        def __init__(
+            self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False
+        ):
+            captured["dsn"] = dsn
+            captured["conflict_strategy"] = conflict_strategy
+            captured["fast_local"] = fast_local
 
         def write_chunk(self, block_rows, tx_rows, txin_rows, txout_rows):
             captured["blocks"] = list(block_rows)
@@ -100,11 +111,20 @@ def test_ingest_range_builds_expected_rows(monkeypatch):
             "postgresql://u:p@localhost:5433/db",
             "--rpc-batch-size",
             "2",
+            "--chunk-size",
+            "2",
+            "--prefetch",
+            "1",
+            "--conflict-strategy",
+            "ignore",
+            "--fast-rpc-decode",
             "--no-progress",
         ]
     )
     assert rc == 0
-    assert captured["network"] == "liquidv1"
+    assert captured["dsn"] == "postgresql://u:p@localhost:5433/db"
+    assert captured["conflict_strategy"] == "ignore"
+    assert captured["fast_local"] is False
     assert len(captured["blocks"]) == 2
     assert {b["height"] for b in captured["blocks"]} == {10, 11}
     assert len(captured["txs"]) == 2

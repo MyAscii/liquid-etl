@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import queue
 import sys
+import threading
 import time
 from typing import Any, Iterable, List, Sequence, Tuple
 
@@ -13,18 +15,39 @@ def ingest_range_to_postgres(args: argparse.Namespace) -> int:
     from ...utils.normalizer import normalize_block, normalize_tx
     from ...utils.postgres_writer import PostgresWriter
 
-    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir)
-    writer = PostgresWriter(args.dsn)
+    fast_rpc_decode = bool(getattr(args, "fast_rpc_decode", False))
+    rpc = LiquidRpc(args.provider_uri, datadir=args.datadir, use_decimal=not fast_rpc_decode)
+    conflict_strategy = str(getattr(args, "conflict_strategy", "update"))
+    fast_local = bool(getattr(args, "fast_local", False))
+    if fast_local and conflict_strategy == "update":
+        conflict_strategy = "ignore"
+    writer = PostgresWriter(args.dsn, conflict_strategy=conflict_strategy, fast_local=fast_local)
     show_progress = _should_show_progress(args)
-    total = int(args.end_block) - int(args.start_block) + 1
-    rpc_batch_size = max(1, int(getattr(args, "rpc_batch_size", 25)))
+    start_block = max(0, int(getattr(args, "start_block", 1)))
+    end_block = getattr(args, "end_block", None)
+    if end_block is None:
+        end_block = int(rpc.getblockcount())
+    end_block = max(start_block, int(end_block))
+
+    total = end_block - start_block + 1
+    rpc_batch_size = max(1, int(getattr(args, "rpc_batch_size", 200)))
+    chunk_size = max(1, int(getattr(args, "chunk_size", 500)))
+    prefetch = max(0, int(getattr(args, "prefetch", 0)))
+    if fast_local and prefetch == 0:
+        prefetch = 2
 
     try:
         started = time.monotonic()
         last_render = started
         done = 0
-        for chunk in _chunked_range(int(args.start_block), int(args.end_block), rpc_batch_size):
-            raw_blocks = _fetch_raw_blocks(rpc, chunk, show_progress)
+        chunks = _chunked_range(start_block, end_block, chunk_size)
+        for raw_blocks in _iter_raw_block_batches(
+            rpc,
+            chunks,
+            rpc_batch_size=rpc_batch_size,
+            show_progress=show_progress,
+            prefetch=prefetch,
+        ):
             block_rows, tx_rows, txin_rows, txout_rows = _normalize_raw_blocks(
                 raw_blocks, normalize_block=normalize_block, normalize_tx=normalize_tx
             )
@@ -54,9 +77,13 @@ def _should_show_progress(args: argparse.Namespace) -> bool:
 
 
 def _chunked_range(start: int, end: int, size: int) -> Iterable[Sequence[int]]:
-    heights = list(range(start, end + 1))
-    for off in range(0, len(heights), size):
-        yield heights[off : off + size]
+    if size <= 0:
+        raise ValueError("size must be positive")
+    current = start
+    while current <= end:
+        chunk_end = min(end, current + size - 1)
+        yield list(range(current, chunk_end + 1))
+        current = chunk_end + 1
 
 
 def _fetch_raw_blocks(rpc: Any, heights: Sequence[int], show_progress: bool) -> List[dict]:
@@ -66,6 +93,89 @@ def _fetch_raw_blocks(rpc: Any, heights: Sequence[int], show_progress: bool) -> 
     hashes = rpc.batch_call([("getblockhash", [h]) for h in heights])
     raw_blocks = rpc.batch_call([("getblock", [bh, 3]) for bh in hashes])
     return list(raw_blocks)
+
+
+def _fetch_raw_blocks_chunked(
+    rpc: Any, heights: Sequence[int], *, rpc_batch_size: int, show_progress: bool
+) -> List[dict]:
+    raw_blocks: List[dict] = []
+    for sub in _chunked_seq(heights, rpc_batch_size):
+        raw_blocks.extend(_fetch_raw_blocks(rpc, sub, show_progress=show_progress))
+    return raw_blocks
+
+
+def _chunked_seq(items: Sequence[int], size: int) -> Iterable[Sequence[int]]:
+    if size <= 0:
+        raise ValueError("size must be positive")
+    for off in range(0, len(items), size):
+        yield items[off : off + size]
+
+
+def _iter_raw_block_batches(
+    rpc: Any,
+    chunks: Iterable[Sequence[int]],
+    *,
+    rpc_batch_size: int,
+    show_progress: bool,
+    prefetch: int,
+) -> Iterable[List[dict]]:
+    if prefetch <= 0:
+        for chunk in chunks:
+            yield _fetch_raw_blocks_chunked(
+                rpc, chunk, rpc_batch_size=rpc_batch_size, show_progress=show_progress
+            )
+        return
+
+    q: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=prefetch)
+    stop = threading.Event()
+
+    def put_interruptible(item: tuple[str, Any]) -> bool:
+        # Block on a full queue only in short slices so a stop signal (consumer gone
+        # or errored) unwedges the producer instead of leaking it forever.
+        while not stop.is_set():
+            try:
+                q.put(item, timeout=0.2)
+                return True
+            except queue.Full:
+                continue
+        return False
+
+    def producer() -> None:
+        try:
+            for chunk in chunks:
+                if stop.is_set():
+                    break
+                raw_blocks = _fetch_raw_blocks_chunked(
+                    rpc, chunk, rpc_batch_size=rpc_batch_size, show_progress=False
+                )
+                if not put_interruptible(("ok", raw_blocks)):
+                    break
+        except BaseException as e:  # noqa: BLE001 - relayed to the consumer thread
+            put_interruptible(("error", e))
+        finally:
+            put_interruptible(("done", None))
+
+    t = threading.Thread(target=producer, daemon=True)
+    t.start()
+    try:
+        while True:
+            kind, payload = q.get()
+            if kind == "ok":
+                yield payload
+            elif kind == "error":
+                raise payload
+            elif kind == "done":
+                break
+    finally:
+        # On normal completion, break, or a consumer-side exception, stop the producer
+        # and drain so a producer blocked on put() can observe the stop and exit.
+        stop.set()
+        try:
+            while True:
+                q.get_nowait()
+        except queue.Empty:
+            pass
+        t.join(timeout=5.0)
 
 
 def _normalize_raw_blocks(

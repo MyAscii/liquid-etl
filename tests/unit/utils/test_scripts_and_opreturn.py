@@ -9,6 +9,38 @@ def test_extract_op_return_data_hex():
     ) == ("aa21a9ed94f15ed3a62165e4a0b99699cc28b48e19cb5bc1b1f47155db62d63f1e047d45")
 
 
+def test_normalize_vout_flags_bare_op_return():
+    # L2 regression on the bulk-ingest normalizer: bare OP_RETURN ("") is an OP_RETURN.
+    from liquidetl.utils.normalization.vout import normalize_vout
+
+    bare = normalize_vout(
+        {"n": 0, "scriptPubKey": {"hex": "6a", "type": "nulldata"}},
+        network="liquidv1",
+        txid="t",
+    )
+    data = normalize_vout(
+        {
+            "n": 1,
+            "scriptPubKey": {
+                "hex": "6a24aa21a9ed94f15ed3a62165e4a0b99699cc28b48e19cb5bc1b1f47155db62d63f1e047d45",
+                "type": "nulldata",
+            },
+        },
+        network="liquidv1",
+        txid="t",
+    )
+    plain = normalize_vout(
+        {"n": 2, "scriptPubKey": {"hex": "0014abcd", "type": "witness_v0_keyhash"}},
+        network="liquidv1",
+        txid="t",
+    )
+    assert bare["is_op_return"] is True
+    assert bare["op_return_data_hex"] == ""
+    assert data["is_op_return"] is True
+    assert plain["is_op_return"] is False
+    assert plain["op_return_data_hex"] is None
+
+
 def test_normalize_coinbase_scriptsig_and_witness():
     class StubRpc:
         def decodescript(self, script_hex: str):

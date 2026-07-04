@@ -51,6 +51,48 @@ class StubRpc:
         }
 
 
+class StubRpcWithPrevouts:
+    def getblockhash(self, height: int):
+        return "h0"
+
+    def getblock(self, h: str, verbosity: int = 2):
+        return {
+            "hash": h,
+            "height": 1,
+            "time": 123,
+            "tx": [
+                {
+                    "txid": "tx0",
+                    "vin": [
+                        {
+                            "txid": "a",
+                            "vout": 0,
+                            "sequence": 0,
+                            "prevout": {
+                                "value": "1.0",
+                                "asset": "assetX",
+                                "scriptPubKey": {"address": "el1in"},
+                            },
+                        }
+                    ],
+                    "vout": [
+                        {"n": 0, "asset": "assetX", "value": "0.9999", "scriptPubKey": {}},
+                    ],
+                }
+            ],
+        }
+
+
+def test_fee_and_input_value_computed_from_prevouts():
+    # H4 regression: with explicit prevout values and no confidential outputs,
+    # input_value and fee must be real numbers, not permanently null.
+    s = LiquidService(StubRpcWithPrevouts())
+    t = s.get_block_by_number(0).transactions[0]
+    assert t["input_value"] == "1.0"
+    assert t["output_value"] == "0.9999"
+    assert t["fee"] == "0.0001"
+
+
 def test_input_types_and_confidential_outputs():
     s = LiquidService(StubRpc())
     bundle = s.get_block_by_number(0)

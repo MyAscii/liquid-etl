@@ -4,8 +4,9 @@ from liquidetl.cli import build_parser
 
 def test_parser_ingest_range_requires_args():
     parser = build_parser()
-    with pytest.raises(SystemExit):
-        parser.parse_args(["ingest_range_to_postgres"])
+    args = parser.parse_args(["ingest_range_to_postgres"])
+    assert args.start_block == 1
+    assert args.end_block is None
 
 
 def test_parser_ingest_range_defaults_and_progress_mutex():
@@ -23,7 +24,7 @@ def test_parser_ingest_range_defaults_and_progress_mutex():
             "postgresql://u:p@localhost:5432/db",
         ]
     )
-    assert args.rpc_batch_size == 25
+    assert args.rpc_batch_size == 200
     assert hasattr(args, "func")
 
     with pytest.raises(SystemExit):

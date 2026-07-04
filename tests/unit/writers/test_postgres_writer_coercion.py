@@ -1,96 +1,14 @@
-import types
+"""Tests for the production coercion functions used by PostgresWriter.
 
-import liquidetl.utils.postgres_writer as pg_mod
+These target liquidetl.utils.postgres.coercion (what write_transaction/write_block
+actually call), not the former dead in-class copies on PostgresWriter.
+"""
 
-
-class _FakeCursor:
-    def __init__(self, state):
-        self._state = state
-        self._pending = None
-
-    def execute(self, sql, params=None):
-        if sql.strip().startswith("SELECT to_regclass"):
-            name = (params[0] or "").split(".", 1)[-1]
-            self._pending = ("to_regclass", name)
-            return
-
-        if "FROM information_schema.columns" in sql:
-            table, column = params
-            self._pending = ("has_column", table, column)
-            return
-
-        if sql.strip().startswith("ALTER TABLE") and " RENAME TO " in sql:
-            parts = sql.strip().split()
-            old = parts[2]
-            new = parts[-1]
-            self._state["renames"].append((old, new))
-            if old in self._state["tables"]:
-                self._state["tables"][new] = self._state["tables"].pop(old)
-            self._pending = None
-            return
-
-        self._pending = None
-
-    def fetchone(self):
-        if not self._pending:
-            return None
-        kind = self._pending[0]
-        if kind == "to_regclass":
-            name = self._pending[1]
-            return (name if name in self._state["tables"] else None,)
-        if kind == "has_column":
-            table, column = self._pending[1], self._pending[2]
-            cols = self._state["tables"].get(table, set())
-            return (1,) if column in cols else None
-        return None
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        return False
+from liquidetl.utils.postgres import writer as pg_writer
+from liquidetl.utils.postgres.coercion import coerce_block_row, coerce_tx_rows
 
 
-class _FakeConn:
-    def __init__(self, state):
-        self._state = state
-
-    def cursor(self):
-        return _FakeCursor(self._state)
-
-    def transaction(self):
-        class _Tx:
-            def __enter__(self_inner):
-                return self_inner
-
-            def __exit__(self_inner, exc_type, exc, tb):
-                return False
-
-        return _Tx()
-
-    def close(self):
-        return None
-
-
-def _install_fake_psycopg(monkeypatch, state):
-    fake = types.SimpleNamespace(connect=lambda *_args, **_kwargs: _FakeConn(state))
-    monkeypatch.setattr(pg_mod, "psycopg", fake, raising=False)
-    monkeypatch.setitem(__import__("sys").modules, "psycopg", fake)
-
-
-def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
-    state = {
-        "tables": {
-            "blocks": {"height"},
-            "transactions": {"txid"},
-            "txins": {"txid"},
-            "txouts": {"txid"},
-        },
-        "renames": [],
-    }
-    _install_fake_psycopg(monkeypatch, state)
-    w = pg_mod.PostgresWriter("postgresql://x")
-
+def test_coerce_tx_rows_populates_fee_maps_and_issuance():
     tx = {
         "txid": "t1",
         "hash": "t1",
@@ -137,7 +55,7 @@ def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
         ],
     }
 
-    tx_row, txins, txouts = w._coerce_tx_rows(tx)
+    tx_row, txins, txouts = coerce_tx_rows(tx)
     assert tx_row["fee_by_asset"] == {"assetX": 100}
     assert tx_row["explicit_out_by_asset"] == {"assetX": 100}
     assert tx_row["explicit_in_by_asset"] is None
@@ -150,19 +68,64 @@ def test_coerce_tx_rows_populates_fee_maps_and_issuance(monkeypatch):
     assert txouts[0]["surjection_proof"] == "sp"
 
 
-def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
-    state = {
-        "tables": {
-            "blocks": {"height"},
-            "transactions": {"txid"},
-            "txins": {"txid"},
-            "txouts": {"txid"},
-        },
-        "renames": [],
+def test_pegin_and_issuance_input_keeps_pegin_flag():
+    # M1 regression: an input that is both a peg-in and an issuance had input_type
+    # clobbered to "issuance"; is_pegin/has_pegin must still be True.
+    tx = {
+        "txid": "t1",
+        "hash": "t1",
+        "inputs": [
+            {
+                "txid": "c",
+                "vout": 2,
+                "input_type": "issuance",
+                "is_pegin": True,
+                "issuance": {"assetamount": "1.0"},
+            }
+        ],
+        "outputs": [],
     }
-    _install_fake_psycopg(monkeypatch, state)
-    w = pg_mod.PostgresWriter("postgresql://x")
+    tx_row, txins, _ = coerce_tx_rows(tx)
+    assert txins[0]["is_pegin"] is True
+    assert txins[0]["has_issuance"] is True
+    assert tx_row["has_pegin"] is True
+    assert tx_row["has_issuance"] is True
 
+
+def test_empty_op_return_is_flagged():
+    # L2 regression: a bare OP_RETURN (empty payload "") is still an OP_RETURN.
+    tx = {
+        "txid": "t1",
+        "hash": "t1",
+        "inputs": [],
+        "outputs": [
+            {"n": 0, "op_return_data_hex": ""},
+            {"n": 1, "op_return_data_hex": None},
+            {"n": 2, "op_return_data_hex": "abcd"},
+        ],
+    }
+    _, _, txouts = coerce_tx_rows(tx)
+    assert txouts[0]["is_op_return"] is True
+    assert txouts[1]["is_op_return"] is False
+    assert txouts[2]["is_op_return"] is True
+
+
+def test_coerce_block_row_genesis_keeps_zero_height():
+    # H3 regression: number==0 must not become NULL via `number or height`.
+    row = coerce_block_row({"hash": "h0", "number": 0})
+    assert row["height"] == 0
+    # falls back to height when number absent
+    assert coerce_block_row({"hash": "h5", "height": 5})["height"] == 5
+
+
+def test_rewrite_upsert_to_do_nothing_keeps_conflict_target():
+    sql = "INSERT INTO t(a) VALUES (1) ON CONFLICT (a) DO UPDATE SET a = EXCLUDED.a"
+    out = pg_writer._rewrite_upsert_to_do_nothing(sql)
+    assert "ON CONFLICT (a) DO NOTHING" in out
+    assert "DO UPDATE SET" not in out
+
+
+def test_coerce_block_row_includes_all_block_table_columns():
     block = {
         "hash": "b1",
         "number": 1,
@@ -172,23 +135,14 @@ def test_coerce_block_row_includes_all_block_table_columns(monkeypatch):
         "merkle_root": "m",
         "timestamp": 10,
         "median_time": 11,
-        "nonce": None,
-        "bits": None,
-        "difficulty": None,
-        "chainwork": None,
         "transaction_count": 1,
         "size": 100,
         "stripped_size": 90,
         "weight": 360,
-        "signblock_challenge": None,
         "signblock_witness_hex": None,
-        "dynafed_current_params": None,
-        "dynafed_proposed_params": None,
-        "signblock_witness": None,
         "txids": ["t1"],
     }
-
-    row = w._coerce_block_row(block)
+    row = coerce_block_row(block)
     expected = {
         "hash",
         "height",
