@@ -75,7 +75,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_filter.add_argument(
         "--predicate",
         required=True,
-        help='Python expression like \'lambda x: x["block_timestamp"][:10]=="2019-03-01"\'',
+        help=(
+            "JSON predicate spec, e.g. "
+            '\'{"field": "block_timestamp", "op": "startswith", "value": "2019-03-01"}\'. '
+            "Ops: eq ne lt le gt ge contains startswith endswith in regex exists; "
+            'combine with {"and":[...]}, {"or":[...]}, {"not":{...}}.'
+        ),
     )
     p_filter.add_argument("--format", choices=("ndjson", "csv"), default="ndjson")
     p_filter.set_defaults(func=filter_items)
