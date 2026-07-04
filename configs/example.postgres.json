@@ -1,0 +1,17 @@
+{
+  "rpc": {
+    "provider_uri": "http://127.0.0.1:7041",
+    "datadir": "E:/Elements"
+  },
+  "postgres": {
+    "dsn": "postgresql://liquidetl:liquidetl@localhost:5433/liquidetl"
+  },
+  "streaming": {
+    "output": "postgresql://liquidetl:liquidetl@localhost:5433/liquidetl",
+    "batch_size": 100,
+    "poll_interval": 2.0,
+    "lag": 0,
+    "rpc_batch_size": 25
+  }
+}
+

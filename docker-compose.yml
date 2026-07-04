@@ -1,14 +1,104 @@
+name: liquid-etl
+
+# Full stack: elementsd node (regtest or liquidv1) -> liquid-etl parser -> Postgres.
+#
+#   Regtest (self-contained, mines its own history):
+#     docker compose --profile regtest up --build
+#
+#   Liquid mainnet (real history; long initial sync):
+#     CHAIN=liquidv1 LIQUID_WAIT_FOR_SYNC=1 docker compose up --build
+#
+# Copy .env.example to .env to set credentials, chain, and tuning.
+
 services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_USER: liquidetl
-      POSTGRES_PASSWORD: liquidetl
-      POSTGRES_DB: liquidetl
+      POSTGRES_USER: ${POSTGRES_USER:-liquidetl}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-liquidetl}
+      POSTGRES_DB: ${POSTGRES_DB:-liquidetl}
     ports:
-      - "5433:5432"
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - liquidetl_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-liquidetl} -d ${POSTGRES_DB:-liquidetl}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  elements:
+    build:
+      context: docker/elements
+      args:
+        ELEMENTS_VERSION: ${ELEMENTS_VERSION:-23.2.4}
+        ELEMENTS_SHA256: ${ELEMENTS_SHA256:-}
+    environment:
+      CHAIN: ${CHAIN:-elementsregtest}
+      RPC_USER: ${RPC_USER:-liquid}
+      RPC_PASSWORD: ${RPC_PASSWORD:-liquid}
+      RPC_PORT: "7041"
+    volumes:
+      - elements_data:/data
+    ports:
+      - "${ELEMENTS_HOST_PORT:-7041}:7041"
+    healthcheck:
+      test: ["CMD-SHELL", "elements-cli -chain=${CHAIN:-elementsregtest} -datadir=/data getblockchaininfo >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 40s
+    restart: unless-stopped
+
+  etl:
+    build:
+      context: .
+      dockerfile: docker/etl/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elements:
+        condition: service_healthy
+    environment:
+      LIQUID_PROVIDER_URI: http://${RPC_USER:-liquid}:${RPC_PASSWORD:-liquid}@elements:7041
+      LIQUID_DSN: postgresql://${POSTGRES_USER:-liquidetl}:${POSTGRES_PASSWORD:-liquidetl}@postgres:5432/${POSTGRES_DB:-liquidetl}
+      LIQUID_PIPELINE_MODE: ${LIQUID_PIPELINE_MODE:-backfill_then_stream}
+      LIQUID_START_BLOCK: ${LIQUID_START_BLOCK:-0}
+      LIQUID_WAIT_FOR_SYNC: ${LIQUID_WAIT_FOR_SYNC:-0}
+      LIQUID_CONFLICT_STRATEGY: ${LIQUID_CONFLICT_STRATEGY:-ignore}
+      LIQUID_FAST_LOCAL: ${LIQUID_FAST_LOCAL:-1}
+      LIQUID_RPC_BATCH_SIZE: ${LIQUID_RPC_BATCH_SIZE:-200}
+      LIQUID_CHUNK_SIZE: ${LIQUID_CHUNK_SIZE:-500}
+      LIQUID_PREFETCH: ${LIQUID_PREFETCH:-8}
+      LIQUID_STREAM_BATCH_SIZE: ${LIQUID_STREAM_BATCH_SIZE:-100}
+      LIQUID_POLL_INTERVAL: ${LIQUID_POLL_INTERVAL:-2}
+      LIQUID_LAG: ${LIQUID_LAG:-0}
+      LIQUID_ENRICH: ${LIQUID_ENRICH:-0}
+    restart: unless-stopped
+
+  # Regtest-only: mines an initial history then keeps producing blocks.
+  # Enable with:  docker compose --profile regtest up
+  miner:
+    profiles: ["regtest"]
+    build:
+      context: docker/elements
+      args:
+        ELEMENTS_VERSION: ${ELEMENTS_VERSION:-23.2.4}
+    depends_on:
+      elements:
+        condition: service_healthy
+    environment:
+      CHAIN: ${CHAIN:-elementsregtest}
+      RPC_CONNECT: elements
+      RPC_PORT: "7041"
+      RPC_USER: ${RPC_USER:-liquid}
+      RPC_PASSWORD: ${RPC_PASSWORD:-liquid}
+      INITIAL_BLOCKS: ${MINE_INITIAL_BLOCKS:-200}
+      MINE_INTERVAL: ${MINE_INTERVAL:-5}
+    entrypoint: ["/usr/local/bin/mine.sh"]
+    restart: unless-stopped
 
 volumes:
   liquidetl_pg:
+  elements_data:

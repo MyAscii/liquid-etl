@@ -10,13 +10,25 @@ Liquid ETL is an Extract-Transform-Load and streaming toolkit for the Liquid Net
 
 Requires a full Liquid/Elements node JSON-RPC endpoint (often `elementsd`), with `txindex=1` for input enrichment.
 
+## Configuration
+
+Most connection settings can be moved out of CLI flags into a JSON config file.
+
+- Pass a config explicitly: `liquidetl --config configs/example.local.json <command> ...`
+- Or drop a default config at `./liquidetl.config.json` or `~/.config/liquidetl/config.json`
+- Optional profiles:
+  - `liquidetl --config config.json --profile prod ...`
+  - Or `LIQUID_ETL_CONFIG=config.json` and `LIQUID_ETL_PROFILE=prod`
+
+CLI flags still work and override config values (for one-off changes).
+
 ## Key Commands
 
 - `liquidetl export_blocks_and_transactions` — exports blocks and transactions for a block range to `blocks.json` and `transactions.json`.
 - `liquidetl enrich_transactions` — fills transaction input details by looking up spent outputs; requires `txindex=1`.
 - `liquidetl get_block_range_for_date` — returns the start and end block covering a specific UTC date.
 - `liquidetl export_all` — partitions a date or block range into batches and writes Hive-style directories under `output/`, optionally enriching transactions.
-- `liquidetl filter_items` — filters NDJSON or CSV outputs using a Python predicate (e.g., by date or other fields).
+- `liquidetl filter_items` — filters NDJSON or CSV outputs using a JSON predicate spec (e.g., by date or other fields).
 - `liquidetl stream` — continuously streams blocks and transactions to console or Pub/Sub.
 
 ## Streaming
@@ -35,12 +47,26 @@ Requires a full Liquid/Elements node JSON-RPC endpoint (often `elementsd`), with
   ```
 - Directly ingest a block range from RPC into Postgres:
   ```sh
-  liquidetl ingest_range_to_postgres -p http://127.0.0.1:7041 --datadir E:/Elements -s 0 -e 1000 --dsn postgresql://liquidetl:liquidetl@localhost:5433/liquidetl
+  liquidetl --config configs/example.postgres.json ingest_range_to_postgres -s 0 -e 1000
   ```
 - Load previously exported NDJSON into Postgres:
   ```sh
-  liquidetl load_ndjson_to_postgres --dsn postgresql://liquidetl:liquidetl@localhost:5433/liquidetl --blocks-input blocks.json --transactions-input transactions.json
+  liquidetl --config configs/example.postgres.json load_ndjson_to_postgres --blocks-input blocks.json --transactions-input transactions.json
   ```
+
+## Full Stack (Docker)
+
+A complete stack (elementsd node + parser + Postgres) is defined in `docker-compose.yml`. It backfills history, then streams the head into Postgres.
+
+```sh
+# Self-contained regtest (mines its own history):
+docker compose --profile regtest up --build
+
+# Liquid mainnet (real history, long initial sync):
+CHAIN=liquidv1 LIQUID_WAIT_FOR_SYNC=1 docker compose up --build
+```
+
+See [docker/README.md](docker/README.md) for details and [.env.example](.env.example) for configuration. The parser runs `python -m liquidetl.pipeline`, an env-driven backfill-then-stream supervisor.
 
 ## Outputs and Schema
 
@@ -117,7 +143,7 @@ Notes:
 - Jobs:
   - `ExportBlocksJob` iterates over block ranges and exports block and transaction items.
   - `EnrichTransactionsJob` resolves input details from previous outputs.
-  - `export_all` orchestrates partitioning by date or block ranges, runs export jobs, and optional post-filtering by date.
+  - `export_all` orchestrates partitioning by date or block ranges and runs export jobs, writing Hive-style partitioned output.
 - Streaming adapter (`LiquidStreamerAdapter`) collects blocks and transactions in batches, optionally enriches transactions, calculates `item_id`s, and exports to console or Pub/Sub.
 - Utilities for filtering, iterating, batching, logging, and thread-local RPC proxies.
 
@@ -125,19 +151,19 @@ Notes:
 
 - Export a block range:
   ```sh
-  liquidetl export_blocks_and_transactions -s 0 -e 500000 -p http://user:pass@localhost:7041 --blocks-output blocks.json --transactions-output transactions.json
+  liquidetl --config configs/example.local.json export_blocks_and_transactions -s 0 -e 500000 --blocks-output blocks.json --transactions-output transactions.json
   ```
 - Enrich transactions:
   ```sh
-  liquidetl enrich_transactions -p http://user:pass@localhost:7041 --transactions-input transactions.json --transactions-output enriched_transactions.json
+  liquidetl --config configs/example.local.json enrich_transactions --transactions-input transactions.json --transactions-output enriched_transactions.json
   ```
 - Get range for date:
   ```sh
-  liquidetl get_block_range_for_date -p http://user:pass@localhost:7041 --date 2019-03-01
+  liquidetl --config configs/example.local.json get_block_range_for_date --date 2019-03-01
   ```
 - Stream with lag and Pub/Sub:
   ```sh
-  liquidetl stream -p http://user:pass@localhost:7041 --start-block 500000 --lag 6 --output projects/your-project/topics/crypto_liquid
+  liquidetl --config configs/example.pubsub.json stream --start-block 500000
   ```
 
 ## Notes and Caveats
@@ -149,5 +175,9 @@ Notes:
 ## Testing
 
 - Dev/test extras: `pip install -e .[dev]` then `pytest -vv`.
-- Optional env vars to point tests at nodes:
-  - `LIQUIDETL_PROVIDER_URI`
+- Lint/format gate (also enforced in CI): `ruff check src tests tune_ingest.py`, `black --check src tests`, `isort --check-only src tests`.
+- Install the pre-commit hook so the gate runs on every commit: `pre-commit install`.
+- Optional env vars to point tests at nodes (integration/e2e are opt-in):
+  - `LIQUID_RPC_URI`
+  - `LIQUID_DSN`
+  - `LIQUID_E2E=1`
