@@ -28,7 +28,7 @@ CLI flags still work and override config values (for one-off changes).
 - `liquidetl enrich_transactions` — fills transaction input details by looking up spent outputs; requires `txindex=1`.
 - `liquidetl get_block_range_for_date` — returns the start and end block covering a specific UTC date.
 - `liquidetl export_all` — partitions a date or block range into batches and writes Hive-style directories under `output/`, optionally enriching transactions.
-- `liquidetl filter_items` — filters NDJSON or CSV outputs using a Python predicate (e.g., by date or other fields).
+- `liquidetl filter_items` — filters NDJSON or CSV outputs using a JSON predicate spec (e.g., by date or other fields).
 - `liquidetl stream` — continuously streams blocks and transactions to console or Pub/Sub.
 
 ## Streaming
@@ -129,7 +129,7 @@ Notes:
 - Jobs:
   - `ExportBlocksJob` iterates over block ranges and exports block and transaction items.
   - `EnrichTransactionsJob` resolves input details from previous outputs.
-  - `export_all` orchestrates partitioning by date or block ranges, runs export jobs, and optional post-filtering by date.
+  - `export_all` orchestrates partitioning by date or block ranges and runs export jobs, writing Hive-style partitioned output.
 - Streaming adapter (`LiquidStreamerAdapter`) collects blocks and transactions in batches, optionally enriches transactions, calculates `item_id`s, and exports to console or Pub/Sub.
 - Utilities for filtering, iterating, batching, logging, and thread-local RPC proxies.
 
@@ -161,6 +161,8 @@ Notes:
 ## Testing
 
 - Dev/test extras: `pip install -e .[dev]` then `pytest -vv`.
+- Lint/format gate (also enforced in CI): `ruff check src tests tune_ingest.py`, `black --check src tests`, `isort --check-only src tests`.
+- Install the pre-commit hook so the gate runs on every commit: `pre-commit install`.
 - Optional env vars to point tests at nodes (integration/e2e are opt-in):
   - `LIQUID_RPC_URI`
   - `LIQUID_DSN`

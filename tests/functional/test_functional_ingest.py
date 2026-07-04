@@ -79,7 +79,9 @@ def test_ingest_range_builds_expected_rows(monkeypatch):
     captured = {"dsn": None, "blocks": None, "txs": None, "ins": None, "outs": None}
 
     class StubWriter:
-        def __init__(self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False):
+        def __init__(
+            self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False
+        ):
             captured["dsn"] = dsn
             captured["conflict_strategy"] = conflict_strategy
             captured["fast_local"] = fast_local

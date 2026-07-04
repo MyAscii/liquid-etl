@@ -18,11 +18,17 @@ class LiquidStreamerAdapter:
         output: str = "console",
         batch_size: int = 100,
         enrich: bool = False,
+        dead_letter: Optional[str] = None,
+        max_block_failures: int = 5,
+        max_backoff: float = 60.0,
     ):
         self.service = service
         self.output = output
         self.batch_size = batch_size
         self.enrich = enrich
+        self.dead_letter = dead_letter
+        self.max_block_failures = max(1, int(max_block_failures))
+        self.max_backoff = float(max_backoff)
         self._pubsub = None
         self._topics = None
         self._db: Optional[DbWriter] = None
@@ -72,12 +78,39 @@ class LiquidStreamerAdapter:
             return
         inline_enrich_inputs(self.service, tx)
 
+    def _process_block(self, height: int) -> None:
+        bundle = self.service.get_block_by_number(height)
+        block_item = bundle.block
+        block_item["item_id"] = block_item.get("hash")
+        txs = bundle.transactions
+        # Enrich (network I/O) before opening the write transaction, then commit the
+        # whole block in one transaction instead of one round-trip per item.
+        for tx in txs:
+            tx["item_id"] = tx.get("hash")
+            self._inline_enrich(tx)
+        if self._db is not None:
+            with self._db.batch():
+                self._db.write_block(block_item)
+                for tx in txs:
+                    self._db.write_transaction(tx)
+        else:
+            self._emit("blocks", block_item)
+            for tx in txs:
+                self._emit("transactions", tx)
+
+    def _record_dead_letter(self, height: int, error: BaseException) -> None:
+        if not self.dead_letter:
+            return
+        record = json.dumps({"height": height, "error": str(error)})
+        with open(self.dead_letter, "a", encoding="utf-8") as f:
+            f.write(record + "\n")
+
     def stream(self, start_block: int, lag: int = 0, poll_interval: float = 2.0) -> None:
         import sys
 
         current = start_block
-        batch_count = 0
         last_log_time = 0.0
+        consecutive_failures = 0
         try:
             while True:
                 try:
@@ -94,14 +127,8 @@ class LiquidStreamerAdapter:
                     # We are catching up
                     emitted = 0
                     while emitted < self.batch_size and current <= head:
-                        bundle = self.service.get_block_by_number(current)
-                        block_item = bundle.block
-                        block_item["item_id"] = block_item.get("hash")
-                        self._emit("blocks", block_item)
-                        for tx in bundle.transactions:
-                            tx["item_id"] = tx.get("hash")
-                            self._inline_enrich(tx)
-                            self._emit("transactions", tx)
+                        self._process_block(current)
+                        consecutive_failures = 0
                         emitted += 1
                         current += 1
 
@@ -114,11 +141,33 @@ class LiquidStreamerAdapter:
                             )
                             sys.stderr.flush()
                             last_log_time = now
-
-                    batch_count += 1
+                except KeyboardInterrupt:
+                    raise
                 except Exception as e:
-                    sys.stderr.write(f"\nstream error: {e}\n")
-                    time.sleep(max(5.0, poll_interval))
+                    consecutive_failures += 1
+                    sys.stderr.write(
+                        f"\nstream error at height {current} "
+                        f"(attempt {consecutive_failures}/{self.max_block_failures}): {e}\n"
+                    )
+                    if consecutive_failures >= self.max_block_failures:
+                        if self.dead_letter:
+                            self._record_dead_letter(current, e)
+                            sys.stderr.write(
+                                f"dead-lettered height {current} after "
+                                f"{consecutive_failures} failures; skipping\n"
+                            )
+                            current += 1
+                            consecutive_failures = 0
+                            continue
+                        raise RuntimeError(
+                            f"aborting stream: height {current} failed "
+                            f"{consecutive_failures} times: {e}"
+                        ) from e
+                    backoff = min(
+                        self.max_backoff,
+                        max(1.0, poll_interval) * (2 ** (consecutive_failures - 1)),
+                    )
+                    time.sleep(backoff)
         except KeyboardInterrupt:
             sys.stderr.write("\nStream stopped by user\n")
             return

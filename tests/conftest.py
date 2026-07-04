@@ -16,7 +16,8 @@ class StubService(LiquidService):
 
     def get_block_by_number(self, height: int) -> BlockWithTxs:
         block = {"hash": f"h{height}", "number": height, "timestamp": 1000 + height}
-        tx = {"hash": f"t{height}", "inputs": [], "outputs": []}
+        # Real normalize_tx always sets 'index'; mirror that so writers can key rows.
+        tx = {"hash": f"t{height}", "index": 0, "inputs": [], "outputs": []}
         return BlockWithTxs(block=block, transactions=[tx])
 
 

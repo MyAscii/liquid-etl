@@ -48,7 +48,9 @@ def test_smoke_ingest_range_executes_with_stubs(monkeypatch):
     captured = {"chunks": 0, "blocks": 0, "txs": 0, "ins": 0, "outs": 0}
 
     class StubWriter:
-        def __init__(self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False):
+        def __init__(
+            self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False
+        ):
             self.dsn = dsn
             self.conflict_strategy = conflict_strategy
             self.fast_local = fast_local
@@ -125,7 +127,9 @@ def test_smoke_ingest_range_defaults_to_tip(monkeypatch):
     captured = {"blocks": 0}
 
     class StubWriter:
-        def __init__(self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False):
+        def __init__(
+            self, dsn: str, *, conflict_strategy: str = "update", fast_local: bool = False
+        ):
             self.dsn = dsn
             self.conflict_strategy = conflict_strategy
             self.fast_local = fast_local

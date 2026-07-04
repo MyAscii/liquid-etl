@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..utils.script_parsing import disassemble_script, extract_op_return_data_hex
@@ -12,14 +12,19 @@ def normalize_tx(
     block_item: Dict[str, Any],
     tx_index: Optional[int] = None,
 ) -> Dict[str, Any]:
-    is_coinbase = any("coinbase" in vin for vin in t.get("vin", []))
+    is_coinbase = any(isinstance(vin, dict) and "coinbase" in vin for vin in t.get("vin", []))
     inputs: List[Dict[str, Any]] = []
-    input_value_total: Optional[Decimal] = None
+    input_value_total: Decimal = Decimal(0)
+    inputs_all_explicit = True
     outputs: List[Dict[str, Any]] = []
     output_value_total: Optional[Decimal] = Decimal(0)
     confidential_present = False
 
     for vin in t.get("vin", []):
+        if not isinstance(vin, dict):
+            # A malformed input we cannot value; do not crash and do not claim a fee.
+            inputs_all_explicit = False
+            continue
         itype = None
         if vin.get("is_pegin"):
             itype = "pegin"
@@ -58,6 +63,7 @@ def normalize_tx(
         }
 
         prevout = vin.get("prevout") if isinstance(vin.get("prevout"), dict) else None
+        prevout_value = None
         if prevout:
             spk = (
                 prevout.get("scriptPubKey", {})
@@ -68,10 +74,22 @@ def normalize_tx(
             item["addresses"] = addrs
             item["required_signatures"] = req_sigs
             item["type"] = spk.get("type")
-            item["value"] = prevout.get("value")
+            prevout_value = prevout.get("value")
+            item["value"] = prevout_value
             item["asset"] = prevout.get("asset")
             item["scriptpubkey_asm"] = spk.get("asm")
             item["scriptpubkey_hex"] = spk.get("hex")
+
+        # Accumulate input value only when every non-coinbase input has an explicit
+        # prevout value; otherwise the fee is not computable and stays null.
+        if not item["is_coinbase"]:
+            if prevout_value is not None:
+                try:
+                    input_value_total += Decimal(str(prevout_value))
+                except (InvalidOperation, ValueError):
+                    inputs_all_explicit = False
+            else:
+                inputs_all_explicit = False
 
         inputs.append(item)
 
@@ -135,13 +153,13 @@ def normalize_tx(
             }
         )
 
+    input_value = (
+        input_value_total if (inputs and not is_coinbase and inputs_all_explicit) else None
+    )
+
     fee = None
-    if not confidential_present:
-        try:
-            if input_value_total is not None and output_value_total is not None:
-                fee = str((input_value_total or Decimal(0)) - (output_value_total or Decimal(0)))
-        except Exception:
-            fee = None
+    if not confidential_present and input_value is not None and output_value_total is not None:
+        fee = str(input_value - output_value_total)
 
     return {
         "hash": t.get("txid") or t.get("hash"),
@@ -166,7 +184,7 @@ def normalize_tx(
         "outputs": outputs,
         "input_count": len(inputs),
         "output_count": len(outputs),
-        "input_value": str(input_value_total) if input_value_total is not None else None,
+        "input_value": str(input_value) if input_value is not None else None,
         "output_value": str(output_value_total) if output_value_total is not None else None,
         "fee": fee,
         "node_fee": t.get("fee"),
