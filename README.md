@@ -54,6 +54,20 @@ CLI flags still work and override config values (for one-off changes).
   liquidetl --config configs/example.postgres.json load_ndjson_to_postgres --blocks-input blocks.json --transactions-input transactions.json
   ```
 
+## Full Stack (Docker)
+
+A complete stack (elementsd node + parser + Postgres) is defined in `docker-compose.yml`. It backfills history, then streams the head into Postgres.
+
+```sh
+# Self-contained regtest (mines its own history):
+docker compose --profile regtest up --build
+
+# Liquid mainnet (real history, long initial sync):
+CHAIN=liquidv1 LIQUID_WAIT_FOR_SYNC=1 docker compose up --build
+```
+
+See [docker/README.md](docker/README.md) for details and [.env.example](.env.example) for configuration. The parser runs `python -m liquidetl.pipeline`, an env-driven backfill-then-stream supervisor.
+
 ## Outputs and Schema
 
 The ETL writes newline-delimited JSON (NDJSON). Below is the schema produced by the normalization layer.
