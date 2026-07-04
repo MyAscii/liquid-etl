@@ -145,5 +145,6 @@ def test_get_block_range_for_date_binary_search(monkeypatch):
     monkeypatch.setattr(s, "get_block_by_number", fake_get_block_by_number)
     monkeypatch.setattr(s, "get_head_height", lambda: 100)
 
-    start, end = s.get_block_range_for_date("2020-09-13", start_hour=0, end_hour=1)
-    assert start < end
+    # Blocks span 12:26:40..13:00:40 UTC; pick a window that actually contains blocks.
+    start, end = s.get_block_range_for_date("2020-09-13", start_hour=12, end_hour=13)
+    assert (start, end) == (0, 33)
