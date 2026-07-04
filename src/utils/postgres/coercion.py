@@ -17,9 +17,13 @@ def coerce_block_row(block: Dict[str, Any]) -> Dict[str, Any]:
             elif isinstance(t, dict) and t.get("txid"):
                 txids.append(t.get("txid"))
 
+    height = block.get("number")
+    if height is None:
+        height = block.get("height")
+
     return {
         "hash": block.get("hash") or block.get("item_id"),
-        "height": block.get("number") or block.get("height"),
+        "height": height,
         "version": block.get("version"),
         "prev_block_hash": block.get("previous_block_hash"),
         "next_block_hash": block.get("next_block_hash"),
@@ -47,7 +51,10 @@ def coerce_tx_rows(
     outputs = tx.get("outputs", []) or []
 
     has_any_confidential = any(isinstance(o, dict) and o.get("confidential_value") for o in outputs)
-    has_pegin = any(isinstance(i, dict) and i.get("input_type") == "pegin" for i in inputs)
+    has_pegin = any(
+        isinstance(i, dict) and (i.get("input_type") == "pegin" or i.get("is_pegin"))
+        for i in inputs
+    )
     has_issuance = any(isinstance(i, dict) and i.get("input_type") == "issuance" for i in inputs)
 
     fee_by_asset = _aggregate_fee_by_asset(tx.get("node_fee"))
@@ -117,7 +124,7 @@ def coerce_tx_rows(
                 "scriptsig_asm": vin.get("scriptsig_asm"),
                 "txinwitness": vin.get("witness"),
                 "pegin_witness": vin.get("pegin_witness"),
-                "is_pegin": vin.get("input_type") == "pegin",
+                "is_pegin": bool(vin.get("input_type") == "pegin" or vin.get("is_pegin")),
                 "has_issuance": vin.get("input_type") == "issuance",
                 "issuance_asset_blinding_nonce": issuance.get("assetBlindingNonce"),
                 "issuance_asset_entropy": issuance.get("assetEntropy"),
@@ -152,7 +159,7 @@ def coerce_tx_rows(
                 "scriptpubkey_asm": vout.get("scriptpubkey_asm"),
                 "script_type": vout.get("script_type"),
                 "address": addr,
-                "is_op_return": bool(vout.get("op_return_data_hex")),
+                "is_op_return": vout.get("op_return_data_hex") is not None,
                 "op_return_data_hex": vout.get("op_return_data_hex"),
                 "is_fee": vout.get("type") == "fee",
                 "surjection_proof": vout.get("surjection_proof"),
