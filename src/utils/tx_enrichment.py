@@ -39,7 +39,9 @@ def inline_enrich_inputs(service: LiquidService, tx: Dict[str, Any]) -> Dict[str
         vouts = prev.get("vout", []) if isinstance(prev, dict) else []
         if not isinstance(vout_index, int) or vout_index < 0 or vout_index >= len(vouts):
             stats["failed"] += 1
-            vin["enrichment_error"] = f"prevout index {vout_index} out of range ({len(vouts)} vouts)"
+            vin["enrichment_error"] = (
+                f"prevout index {vout_index} out of range ({len(vouts)} vouts)"
+            )
             logger.warning("enrichment prevout %s:%s out of range", txid, vout_index)
             continue
 

@@ -2,7 +2,6 @@ import csv
 import json
 
 import pytest
-
 from liquidetl.utils.filters import PredicateError, compile_predicate, filter_items
 
 

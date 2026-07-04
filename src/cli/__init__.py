@@ -12,7 +12,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        cfg = load_effective_config(cli_path=getattr(args, "config", None), cli_profile=getattr(args, "profile", None))
+        cfg = load_effective_config(
+            cli_path=getattr(args, "config", None), cli_profile=getattr(args, "profile", None)
+        )
         apply_config_defaults(args, cfg)
         validate_required_args(args)
         return int(args.func(args))

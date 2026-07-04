@@ -161,6 +161,8 @@ Notes:
 ## Testing
 
 - Dev/test extras: `pip install -e .[dev]` then `pytest -vv`.
+- Lint/format gate (also enforced in CI): `ruff check src tests tune_ingest.py`, `black --check src tests`, `isort --check-only src tests`.
+- Install the pre-commit hook so the gate runs on every commit: `pre-commit install`.
 - Optional env vars to point tests at nodes (integration/e2e are opt-in):
   - `LIQUID_RPC_URI`
   - `LIQUID_DSN`

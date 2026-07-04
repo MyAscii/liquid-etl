@@ -31,7 +31,9 @@ class PostgresWriter:
         self._insert_transactions_sql = _apply_conflict_strategy(
             sql_text("insert_transactions.sql"), conflict_strategy
         )
-        self._insert_txins_sql = _apply_conflict_strategy(sql_text("insert_txins.sql"), conflict_strategy)
+        self._insert_txins_sql = _apply_conflict_strategy(
+            sql_text("insert_txins.sql"), conflict_strategy
+        )
         self._insert_txouts_sql = _apply_conflict_strategy(
             sql_text("insert_txouts.sql"), conflict_strategy
         )

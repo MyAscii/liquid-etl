@@ -38,4 +38,3 @@ def test_ingest_benchmark_smoke():
     blocks = end_block - start_block + 1
     print(f"ingest benchmark: {blocks / elapsed:.2f} blk/s ({blocks} blocks in {elapsed:.2f}s)")
     assert rc == 0
-

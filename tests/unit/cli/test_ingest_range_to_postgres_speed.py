@@ -1,9 +1,8 @@
 import threading
 import time
 
-import pytest
-
 import liquidetl.cli.commands.ingest_range_to_postgres as mod
+import pytest
 
 
 def test_chunked_range_yields_expected_heights():
@@ -72,4 +71,3 @@ def test_prefetch_producer_error_propagates_to_consumer(monkeypatch):
     while threading.active_count() > base and time.monotonic() < deadline:
         time.sleep(0.01)
     assert threading.active_count() == base
-

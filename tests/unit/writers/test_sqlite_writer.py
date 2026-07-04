@@ -1,7 +1,6 @@
 import sqlite3
 
 import pytest
-
 from liquidetl.utils.sqlite.writer import SQLiteWriter
 
 

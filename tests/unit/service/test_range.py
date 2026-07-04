@@ -1,7 +1,6 @@
 from datetime import datetime, timezone
 
 import pytest
-
 from liquidetl.service import LiquidService
 from liquidetl.service.range import get_block_range_for_date
 

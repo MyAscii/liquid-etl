@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_all.set_defaults(func=export_all)
 
     p_filter = sub.add_parser(
-        "filter_items", help="Filter NDJSON or CSV outputs using a Python predicate"
+        "filter_items", help="Filter NDJSON or CSV outputs using a JSON predicate spec"
     )
     p_filter.add_argument("--input", required=True)
     p_filter.add_argument("--output", required=True)
@@ -100,7 +100,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="'console', 'sqlite:///path/to.db', 'postgres://user:pass@host:5432/dbname' or projects/.../topics/crypto_liquid",
     )
     p_stream.add_argument("--batch-size", type=int, default=100)
-    p_stream.add_argument("--rpc-batch-size", type=int, default=1, help="Number of blocks to fetch concurrently")
+    p_stream.add_argument(
+        "--rpc-batch-size", type=int, default=1, help="Number of blocks to fetch concurrently"
+    )
     p_stream.add_argument("--poll-interval", type=float, default=2.0)
     p_stream.add_argument("--enrich", action="store_true")
     p_stream.add_argument(
@@ -175,7 +177,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--prefetch",
         type=int,
         default=8,
-        help="Prefetch N chunks in a background thread (default: 0)",
+        help="Prefetch N chunks in a background thread (default: 8; 0 disables)",
     )
     p_ingest_pg.add_argument(
         "--conflict-strategy",

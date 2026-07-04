@@ -6,7 +6,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import List, Optional, Sequence
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 
@@ -284,7 +284,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p = argparse.ArgumentParser(prog="tune_ingest.py")
     p.add_argument("--provider-uri", "-p", required=True)
     p.add_argument("--datadir", default=None)
-    p.add_argument("--dsn", required=True, help="postgresql://... (base DSN, schema is created/dropped per run)")
+    p.add_argument(
+        "--dsn",
+        required=True,
+        help="postgresql://... (base DSN, schema is created/dropped per run)",
+    )
     p.add_argument("--start-block", type=int, default=1)
     p.add_argument("--blocks", type=int, default=30000)
     p.add_argument("--rounds", type=int, default=2)
@@ -318,4 +322,3 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
