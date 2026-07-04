@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import argparse
-import sys
-import time
 import queue
+import sys
 import threading
+import time
 from typing import Any, Iterable, List, Sequence, Tuple
 
 from ..progress import fmt_eta, render_bar
@@ -129,6 +129,17 @@ def _iter_raw_block_batches(
     q: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=prefetch)
     stop = threading.Event()
 
+    def put_interruptible(item: tuple[str, Any]) -> bool:
+        # Block on a full queue only in short slices so a stop signal (consumer gone
+        # or errored) unwedges the producer instead of leaking it forever.
+        while not stop.is_set():
+            try:
+                q.put(item, timeout=0.2)
+                return True
+            except queue.Full:
+                continue
+        return False
+
     def producer() -> None:
         try:
             for chunk in chunks:
@@ -137,23 +148,34 @@ def _iter_raw_block_batches(
                 raw_blocks = _fetch_raw_blocks_chunked(
                     rpc, chunk, rpc_batch_size=rpc_batch_size, show_progress=False
                 )
-                q.put(("ok", raw_blocks))
-        except BaseException as e:
-            q.put(("error", e))
+                if not put_interruptible(("ok", raw_blocks)):
+                    break
+        except BaseException as e:  # noqa: BLE001 - relayed to the consumer thread
+            put_interruptible(("error", e))
         finally:
-            q.put(("done", None))
+            put_interruptible(("done", None))
 
     t = threading.Thread(target=producer, daemon=True)
     t.start()
-    while True:
-        kind, payload = q.get()
-        if kind == "ok":
-            yield payload
-        elif kind == "error":
-            stop.set()
-            raise payload
-        elif kind == "done":
-            break
+    try:
+        while True:
+            kind, payload = q.get()
+            if kind == "ok":
+                yield payload
+            elif kind == "error":
+                raise payload
+            elif kind == "done":
+                break
+    finally:
+        # On normal completion, break, or a consumer-side exception, stop the producer
+        # and drain so a producer blocked on put() can observe the stop and exit.
+        stop.set()
+        try:
+            while True:
+                q.get_nowait()
+        except queue.Empty:
+            pass
+        t.join(timeout=5.0)
 
 
 def _normalize_raw_blocks(
